@@ -13,7 +13,7 @@ A local observability dashboard for dbt Cloud that surfaces model-level executio
 **Requirements:** Python 3.8+, a dbt Cloud account with read + metadata access token
 
 ```bash
-git clone https://github.com/mfreeborndbt/SAO_YAML_Optimizer.git
+git clone https://github.com/mfreeborndbt/SAO_Advanced_Configuration_Optimizer.git
 cd SAO_YAML_Optimizer
 ./run.sh
 ```
