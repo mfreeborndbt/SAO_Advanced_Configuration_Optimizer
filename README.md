@@ -1,4 +1,4 @@
-# SAO YAML Optimizer
+# SAO Advanced Configuration Optimizer
 
 A local observability dashboard for dbt Cloud that surfaces model-level execution data and generates actionable SAO (State-Aware Orchestration) configuration recommendations — helping teams reduce compute costs by 20%+ through smarter scheduling policies.
 
