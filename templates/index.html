@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — SAO Observability</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e1e4ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c63ff;
+      --green: #34d399;
+      --red: #f87171;
+      --orange: #fbbf24;
+      --blue: #60a5fa;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .summary {
+      display: flex;
+      gap: 1.25rem;
+      margin: 1.5rem 0 2rem;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1.25rem;
+      min-width: 120px;
+    }
+    .card .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; }
+    .card .detail { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="text"], input[type="number"], select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    input[type="text"] { width: 260px; }
+    input::placeholder { color: var(--text-muted); }
+    input[type="number"] { color-scheme: dark; }
+    .table-wrap { overflow-x: auto; position: relative; }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    th, td { border-bottom: 1px solid var(--border); }
+    th {
+      background: #14161e;
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      overflow: hidden;
+    }
+    th { position: relative; }
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: col-resize;
+      background: transparent;
+    }
+    .resize-handle:hover, .resize-handle.active { background: var(--accent); }
+    th:hover { color: var(--text); }
+    th.sorted-asc::after { content: " \25B2"; font-size: 0.55rem; }
+    th.sorted-desc::after { content: " \25BC"; font-size: 0.55rem; }
+    td {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tr:hover td { background: rgba(108, 99, 255, 0.05); }
+    /* Sticky first column (Model name) */
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--surface);
+      border-right: 2px solid var(--border);
+      max-width: none;
+    }
+    th:first-child { z-index: 3; background: #14161e; }
+    tr:hover td:first-child { background: #1e2130; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-table { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+    .badge-incremental { background: rgba(251, 191, 36, 0.15); color: var(--orange); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+    .muted { color: var(--text-muted); }
+    .bar-cell { min-width: 90px; }
+    .bar-container { background: var(--border); border-radius: 3px; height: 5px; width: 100%; }
+    .bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    .bar-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
+    .jobs-warn { color: var(--orange); font-weight: 600; }
+    .delta-pos { color: var(--green); }
+    .delta-neg { color: var(--red); }
+    .delta-zero { color: var(--text-muted); }
+    .change-high { color: var(--green); }
+    .change-low { color: var(--text-muted); }
+    .model-name { font-weight: 500; }
+    .schema-label { color: var(--text-muted); font-size: 0.65rem; }
+
+    /* Multi-select dropdown styles */
+    .multi-select {
+      position: relative;
+      display: inline-block;
+    }
+    .multi-select-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      min-width: 100px;
+    }
+    .multi-select-btn:hover {
+      border-color: var(--accent);
+    }
+    .multi-select-btn::after {
+      content: "\25BC";
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+    .multi-select-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-top: 4px;
+      min-width: 180px;
+      max-height: 280px;
+      overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .multi-select-dropdown.open {
+      display: block;
+    }
+    .multi-select-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+    .multi-select-item:hover {
+      background: rgba(108, 99, 255, 0.1);
+    }
+    .multi-select-item input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+    .multi-select-item label {
+      cursor: pointer;
+      flex: 1;
+    }
+    .multi-select-actions {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .multi-select-actions button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 0.72rem;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+    }
+    .multi-select-actions button:hover { text-decoration: underline; }
+  </style>
+  <style id="hlOverrides"></style>
+  <style>
+    .tab-nav { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: var(--text); text-decoration: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab-spacer { flex: 1; }
+    .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
+    .tab-link:hover { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <nav class="tab-nav">
+    <a href="/" class="tab active">Dashboard</a>
+    <a href="/recommendations" class="tab">Recommendations</a>
+    <span class="tab-spacer"></span>
+    <a href="/warehouses" class="tab-link">Warehouse Costs</a>
+    <a href="/setup" class="tab-link">Setup</a>
+  </nav>
+
+  <header>
+    <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ model observability</span></h1>
+    <div class="subtitle">Tables & incremental models — aggregated from {{ total_runs }} successful runs over the past 7 days</div>
+  </header>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Models</div>
+      <div class="value">{{ models | length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Runs Analyzed</div>
+      <div class="value">{{ total_runs }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Compute</div>
+      <div class="value" style="font-size:1.1rem;">{{ (models | sum(attribute='total_execution_time') | default(0)) | duration }}</div>
+      <div class="detail">sum of all model exec time</div>
+    </div>
+    {% set multi_job = models | selectattr('num_jobs', 'greaterthan', 1) | list %}
+    <div class="card">
+      <div class="label">Multi-Job Models</div>
+      <div class="value" {% if multi_job %}style="color: var(--orange);"{% endif %}>{{ multi_job | length }}</div>
+      <div class="detail">overlap: in >1 job</div>
+    </div>
+    <div class="card">
+      <div class="label">Slowest (avg)</div>
+      <div class="value" style="font-size:1.1rem;">{% if models %}{{ models[0].avg_execution_time | duration }}{% endif %}</div>
+      <div class="detail">{% if models %}{{ models[0].name }}{% endif %}</div>
+    </div>
+    {% set total_delta = models | rejectattr('row_delta', 'none') | sum(attribute='row_delta') %}
+    <div class="card">
+      <div class="label">Net Row Change (7d)</div>
+      <div class="value" style="font-size:1.1rem;">
+        {% if total_delta > 0 %}<span class="delta-pos">+{{ "{:,}".format(total_delta | int) }}</span>
+        {% elif total_delta < 0 %}<span class="delta-neg">{{ "{:,}".format(total_delta | int) }}</span>
+        {% else %}<span class="delta-zero">0</span>{% endif %}
+      </div>
+    </div>
+    {% if has_costs %}
+    {% set total_cost_val = models | rejectattr('total_cost', 'none') | sum(attribute='total_cost') %}
+    <div class="card">
+      <div class="label">Total Cost (7d)</div>
+      <div class="value" style="font-size:1.1rem;">{{ total_cost_val | cost }}</div>
+      <div class="detail">across all model runs</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="controls">
+    <div class="multi-select" id="colToggleWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
+      <div class="multi-select-dropdown">
+        <!-- populated by JS from table headers -->
+      </div>
+    </div>
+
+    <div class="multi-select" id="hlToggleWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('hlToggleWrap')">Highlight</div>
+      <div class="multi-select-dropdown">
+        <!-- populated by JS from numeric columns -->
+      </div>
+    </div>
+
+    <input type="text" id="search" placeholder="Filter models..." oninput="filterTable()">
+
+    <div class="multi-select" id="matFilterWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('matFilterWrap')">All types</div>
+      <div class="multi-select-dropdown">
+        <div class="multi-select-actions">
+          <button onclick="msSelectAll('matFilterWrap'); updateMultiSelect('matFilterWrap','types'); filterTable()">Select all</button>
+          <button onclick="msClearAll('matFilterWrap'); updateMultiSelect('matFilterWrap','types'); filterTable()">Clear all</button>
+        </div>
+        <div class="multi-select-item">
+          <input type="checkbox" id="mat_table" value="table" onchange="updateMultiSelect('matFilterWrap','types'); filterTable()">
+          <label for="mat_table">table</label>
+        </div>
+        <div class="multi-select-item">
+          <input type="checkbox" id="mat_incremental" value="incremental" onchange="updateMultiSelect('matFilterWrap','types'); filterTable()">
+          <label for="mat_incremental">incremental</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="multi-select" id="layerFilterWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('layerFilterWrap')">All layers</div>
+      <div class="multi-select-dropdown">
+        <div class="multi-select-actions">
+          <button onclick="msSelectAll('layerFilterWrap'); updateMultiSelect('layerFilterWrap','layers'); filterTable()">Select all</button>
+          <button onclick="msClearAll('layerFilterWrap'); updateMultiSelect('layerFilterWrap','layers'); filterTable()">Clear all</button>
+        </div>
+        {% for l in models | map(attribute='layer') | unique | sort %}
+        {% if l %}
+        <div class="multi-select-item">
+          <input type="checkbox" value="{{ l }}" onchange="updateMultiSelect('layerFilterWrap','layers'); filterTable()">
+          <label>{{ l }}</label>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="multi-select" id="folder1FilterWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('folder1FilterWrap')">All folder1</div>
+      <div class="multi-select-dropdown">
+        <div class="multi-select-actions">
+          <button onclick="msSelectAll('folder1FilterWrap'); updateMultiSelect('folder1FilterWrap','folder1'); filterTable()">Select all</button>
+          <button onclick="msClearAll('folder1FilterWrap'); updateMultiSelect('folder1FilterWrap','folder1'); filterTable()">Clear all</button>
+        </div>
+        {% for f in models | map(attribute='folder1') | unique | sort %}
+        {% if f %}
+        <div class="multi-select-item">
+          <input type="checkbox" value="{{ f }}" onchange="updateMultiSelect('folder1FilterWrap','folder1'); filterTable()">
+          <label>{{ f }}</label>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="multi-select" id="folder2FilterWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('folder2FilterWrap')">All folder2</div>
+      <div class="multi-select-dropdown">
+        <div class="multi-select-actions">
+          <button onclick="msSelectAll('folder2FilterWrap'); updateMultiSelect('folder2FilterWrap','folder2'); filterTable()">Select all</button>
+          <button onclick="msClearAll('folder2FilterWrap'); updateMultiSelect('folder2FilterWrap','folder2'); filterTable()">Clear all</button>
+        </div>
+        {% for f in models | map(attribute='folder2') | unique | sort %}
+        {% if f %}
+        <div class="multi-select-item">
+          <input type="checkbox" value="{{ f }}" onchange="updateMultiSelect('folder2FilterWrap','folder2'); filterTable()">
+          <label>{{ f }}</label>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="multi-select" id="tagFilterWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('tagFilterWrap')">All tags</div>
+      <div class="multi-select-dropdown">
+        <div class="multi-select-actions">
+          <button onclick="msSelectAll('tagFilterWrap'); updateMultiSelect('tagFilterWrap','tags'); filterTable()">Select all</button>
+          <button onclick="msClearAll('tagFilterWrap'); updateMultiSelect('tagFilterWrap','tags'); filterTable()">Clear all</button>
+        </div>
+        {% set all_tags = [] %}
+        {% for m in models %}{% for t in m.tags %}{% if t not in all_tags %}{% if all_tags.append(t) %}{% endif %}{% endif %}{% endfor %}{% endfor %}
+        {% for t in all_tags | sort %}
+        <div class="multi-select-item">
+          <input type="checkbox" value="{{ t }}" onchange="updateMultiSelect('tagFilterWrap','tags'); filterTable()">
+          <label>{{ t }}</label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="controls" style="margin-top: 0;">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min runs:</label>
+    <input type="number" id="minRuns" min="0" value="" placeholder="--" style="width:60px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min jobs:</label>
+    <input type="number" id="minJobs" min="0" value="" placeholder="--" style="width:60px;" oninput="filterTable()">
+    {% if has_costs %}
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min total cost $:</label>
+    <input type="number" id="minTotalCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min avg cost $:</label>
+    <input type="number" id="minAvgCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min downstream cost $:</label>
+    <input type="number" id="minDownstreamCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    {% endif %}
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min |avg new rows|:</label>
+    <input type="number" id="minAvgNewRows" min="0" step="1" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min upstream tbls:</label>
+    <input type="number" id="minUpstreamTbls" min="0" step="1" value="" placeholder="--" style="width:60px;" oninput="filterTable()">
+    {% if has_costs %}
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min upstream cost $:</label>
+    <input type="number" id="minUpstreamCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    {% endif %}
+  </div>
+
+  <div class="table-wrap">
+  <table id="modelTable">
+    <thead>
+      <tr>
+        <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
+        <th data-col="1" onclick="sortTable(1, 'str')">Layer</th>
+        <th data-col="2" onclick="sortTable(2, 'str')">Folder 1</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">Folder 2</th>
+        <th data-col="4" onclick="sortTable(4, 'str')">Folder 3</th>
+        <th data-col="5" onclick="sortTable(5, 'str')">Type</th>
+        <th data-col="6" onclick="sortTable(6, 'str')">Lang</th>
+        <th data-col="7" onclick="sortTable(7, 'str')">Tags</th>
+        <th data-col="8" onclick="sortTable(8, 'str')">Warehouse</th>
+        <th data-col="9" onclick="sortTable(9, 'str')">updates_on</th>
+        <th data-col="10" onclick="sortTable(10, 'str')">build_after</th>
+        <th data-col="11" onclick="sortTable(11, 'num')">Runs</th>
+        <th data-col="12" onclick="sortTable(12, 'num')">Max Daily</th>
+        <th data-col="13" onclick="sortTable(13, 'num')">Jobs</th>
+        <th data-col="14" onclick="sortTable(14, 'num')">Job #1</th>
+        <th data-col="15" onclick="sortTable(15, 'str')">J1 Schedule</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">Job #2</th>
+        <th data-col="17" onclick="sortTable(17, 'str')">J2 Schedule</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Job #3</th>
+        <th data-col="19" onclick="sortTable(19, 'str')">J3 Schedule</th>
+        <th data-col="20" onclick="sortTable(20, 'num')">Total Time</th>
+        <th data-col="21" onclick="sortTable(21, 'num')">Avg Time</th>
+        <th data-col="22" onclick="sortTable(22, 'num')">Min</th>
+        <th data-col="23" onclick="sortTable(23, 'num')">Max</th>
+        <th data-col="24" onclick="sortTable(24, 'num')">Total Cost</th>
+        <th data-col="25" onclick="sortTable(25, 'num')">Avg Cost</th>
+        <th data-col="26" onclick="sortTable(26, 'num')">Min Cost</th>
+        <th data-col="27" onclick="sortTable(27, 'num')">Max Cost</th>
+        <th data-col="28" onclick="sortTable(28, 'num')">Rows (start)</th>
+        <th data-col="29" onclick="sortTable(29, 'num')">Rows (now)</th>
+        <th data-col="30" onclick="sortTable(30, 'num')">Row Delta</th>
+        <th data-col="31" onclick="sortTable(31, 'num')">Runs w/ Change</th>
+        <th data-col="32" onclick="sortTable(32, 'num')">Change %</th>
+        <th data-col="33" onclick="sortTable(33, 'num')">Avg New Rows</th>
+        <th data-col="34" onclick="sortTable(34, 'num')">Columns</th>
+        <th data-col="35" onclick="sortTable(35, 'num')">Values</th>
+        <th data-col="36" onclick="sortTable(36, 'num')">Upstream Tbls</th>
+        <th data-col="37" onclick="sortTable(37, 'num')">Upstream Avg Cost</th>
+        <th data-col="38" onclick="sortTable(38, 'num')">Downstream Tbls</th>
+        <th data-col="39" onclick="sortTable(39, 'num')">Downstream Avg Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models %}
+      <tr data-mat="{{ m.materialized }}" data-name="{{ m.name | lower }}"
+          data-layer="{{ m.layer }}" data-folder1="{{ m.folder1 }}"
+          data-folder2="{{ m.folder2 }}"
+          data-tags="{{ m.tags | join(',') }}"
+          data-runs="{{ m.total_runs }}" data-jobs="{{ m.num_jobs }}"
+          data-totalcost="{{ m.total_cost or 0 }}" data-avgcost="{{ m.avg_cost or 0 }}"
+          data-downstreamcost="{{ m.downstream_avg_cost or 0 }}"
+          data-avgnewrows="{{ (m.avg_new_rows | abs) if m.avg_new_rows is not none else '' }}"
+          data-upstreamtbls="{{ m.upstream_table_count }}"
+          data-upstreamcost="{{ m.upstream_avg_cost or 0 }}">
+        <td>
+          <div class="model-name">{{ m.name }}</div>
+          <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
+        </td>
+        <td>{{ m.layer }}</td>
+        <td>{{ m.folder1 or '' }}</td>
+        <td>{{ m.folder2 or '' }}</td>
+        <td>{{ m.folder3 or '' }}</td>
+        <td><span class="badge badge-{{ m.materialized }}">{{ m.materialized }}</span></td>
+        <td>{{ m.language }}</td>
+        <td>{% if m.tags %}<span style="font-size:0.7rem;">{{ m.tags | join(', ') }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td>
+          {% if m.warehouse %}
+            {% if m.warehouse_override %}<span style="color:var(--orange)">{{ m.warehouse }}</span>
+            {% else %}{{ m.warehouse }}{% endif %}
+          {% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td>{{ m.updates_on or '—' }}</td>
+        <td>{% if m.build_after_count and m.build_after_period %}{{ m.build_after_count }} {{ m.build_after_period }}{% else %}—{% endif %}</td>
+        <td class="num" data-val="{{ m.total_runs }}">{{ m.total_runs }}</td>
+        <td class="num" data-val="{{ m.max_daily_runs }}">{{ m.max_daily_runs }}</td>
+        <td class="num" data-val="{{ m.num_jobs }}">
+          {% if m.num_jobs > 1 %}<span class="jobs-warn">{{ m.num_jobs }}</span>{% else %}{{ m.num_jobs }}{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.job1_runs }}">{{ m.job1_runs }}</td>
+        <td><span style="font-size:0.7rem;">{{ m.job1_cadence }}</span></td>
+        <td class="num" data-val="{{ m.job2_runs }}">{% if m.job2_runs %}<span class="jobs-warn">{{ m.job2_runs }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td>{% if m.job2_runs %}<span style="font-size:0.7rem;">{{ m.job2_cadence }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.job3_runs }}">{% if m.job3_runs %}<span class="jobs-warn">{{ m.job3_runs }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td>{% if m.job3_runs %}<span style="font-size:0.7rem;">{{ m.job3_cadence }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.total_execution_time or 0 }}">
+          {{ m.total_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.avg_execution_time or 0 }}">
+          {{ m.avg_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.min_execution_time or 0 }}">
+          {{ m.min_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.max_execution_time or 0 }}">
+          {{ m.max_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.total_cost or 0 }}">{% if has_costs %}{{ m.total_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.avg_cost or 0 }}">{% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.min_cost or 0 }}">{% if has_costs %}{{ m.min_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.max_cost or 0 }}">{% if has_costs %}{{ m.max_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.earliest_rows or 0 }}">
+          {% if m.earliest_rows is not none %}{{ "{:,}".format(m.earliest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.latest_rows or 0 }}">
+          {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.row_delta or 0 }}">
+          {% if m.row_delta is not none %}
+            {% if m.row_delta > 0 %}<span class="hl hl-rowdelta delta-pos">+{{ "{:,}".format(m.row_delta) }}</span>
+            {% elif m.row_delta < 0 %}<span class="hl hl-rowdelta delta-neg">{{ "{:,}".format(m.row_delta) }}</span>
+            {% else %}<span class="hl hl-rowdelta delta-zero">0</span>{% endif %}
+          {% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.runs_with_change or 0 }}">
+          {% if m.runs_with_data is not none and m.runs_with_data > 1 %}
+            {{ m.runs_with_change }} / {{ m.runs_with_data - 1 }}
+          {% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.change_pct or 0 }}">
+          {% if m.change_pct is not none %}
+            <span class="hl hl-changepct {% if m.change_pct > 0 %}change-high{% else %}change-low{% endif %}">{{ "%.0f"|format(m.change_pct) }}%</span>
+          {% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
+          {% if m.avg_new_rows is not none %}<span class="hl hl-avgnewrows {% if m.avg_new_rows > 0 %}delta-pos{% elif m.avg_new_rows < 0 %}delta-neg{% else %}delta-zero{% endif %}">{{ "{:,.0f}".format(m.avg_new_rows) }}</span>{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.column_count }}">{{ m.column_count or '--' }}</td>
+        <td class="num" data-val="{{ m.total_values or 0 }}">
+          {% if m.total_values is not none %}{{ "{:,}".format(m.total_values) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.upstream_table_count }}">{{ m.upstream_table_count }}</td>
+        <td class="num" data-val="{{ m.upstream_avg_cost or 0 }}">{% if has_costs %}{{ m.upstream_avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.downstream_table_count }}"><span class="hl hl-downstreamtbls {% if m.downstream_table_count > 0 %}delta-pos{% endif %}">{{ m.downstream_table_count }}</span></td>
+        <td class="num" data-val="{{ m.downstream_avg_cost or 0 }}">{% if has_costs %}<span class="hl hl-downstreamcost {% if m.downstream_avg_cost is not none and m.downstream_avg_cost > 0 %}delta-pos{% endif %}">{{ m.downstream_avg_cost | cost }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <script>
+    /* --- Multi-select dropdown logic --- */
+    function toggleDropdown(wrapId) {
+      const wrap = document.getElementById(wrapId);
+      const dd = wrap.querySelector('.multi-select-dropdown');
+      const isOpen = dd.classList.contains('open');
+      // Close all dropdowns first
+      document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
+      if (!isOpen) dd.classList.add('open');
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.multi-select')) {
+        document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
+      }
+    });
+
+    function getSelectedValues(wrapId) {
+      const wrap = document.getElementById(wrapId);
+      const checked = wrap.querySelectorAll('input[type="checkbox"]:checked');
+      return Array.from(checked).map(cb => cb.value);
+    }
+
+    function updateMultiSelect(wrapId, categoryName) {
+      const wrap = document.getElementById(wrapId);
+      const btn = wrap.querySelector('.multi-select-btn');
+      const allCbs = wrap.querySelectorAll('.multi-select-item input[type="checkbox"]');
+      const selected = getSelectedValues(wrapId);
+      if (selected.length === 0 || selected.length === allCbs.length) {
+        btn.textContent = 'All ' + categoryName;
+      } else if (selected.length === 1) {
+        btn.textContent = selected[0];
+      } else {
+        btn.textContent = selected.length + ' ' + categoryName;
+      }
+    }
+
+    function msSelectAll(wrapId) {
+      document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = true);
+    }
+    function msClearAll(wrapId) {
+      document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+    }
+
+    /* --- Column Visibility Toggle --- */
+    function initColumnToggle() {
+      const ths = document.querySelectorAll('#modelTable thead th');
+      const container = document.querySelector('#colToggleWrap .multi-select-dropdown');
+      const actions = document.createElement('div');
+      actions.className = 'multi-select-actions';
+      actions.innerHTML = '<button onclick="msSelectAll(\'colToggleWrap\'); toggleColumns()">Select all</button><button onclick="msClearAll(\'colToggleWrap\'); toggleColumns()">Clear all</button>';
+      container.appendChild(actions);
+      ths.forEach((th, i) => {
+        if (i === 0) return;
+        const name = th.textContent.trim();
+        const item = document.createElement('div');
+        item.className = 'multi-select-item';
+        item.innerHTML = '<input type="checkbox" checked data-col-idx="' + i + '" onchange="toggleColumns()"><label>' + name + '</label>';
+        container.appendChild(item);
+      });
+    }
+
+    function toggleColumns() {
+      const checkboxes = document.querySelectorAll('#colToggleWrap .multi-select-item input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        const idx = parseInt(cb.dataset.colIdx);
+        const display = cb.checked ? '' : 'none';
+        document.querySelectorAll('#modelTable tr').forEach(row => {
+          if (row.cells[idx]) row.cells[idx].style.display = display;
+        });
+      });
+    }
+
+    /* --- Highlight Toggle --- */
+    // Map column header names to hl- class prefixes for all numeric columns
+    const HL_MAP = {};
+    function initHighlightToggle() {
+      const ths = document.querySelectorAll('#modelTable thead th');
+      const container = document.querySelector('#hlToggleWrap .multi-select-dropdown');
+      const actions = document.createElement('div');
+      actions.className = 'multi-select-actions';
+      actions.innerHTML = '<button onclick="msSelectAll(\'hlToggleWrap\'); toggleHighlights()">Select all</button><button onclick="msClearAll(\'hlToggleWrap\'); toggleHighlights()">Clear all</button>';
+      container.appendChild(actions);
+
+      // Find columns that have numeric data (onclick contains 'num')
+      ths.forEach((th, i) => {
+        if (i === 0) return;
+        const onclick = th.getAttribute('onclick') || '';
+        if (!onclick.includes("'num'")) return;
+        const name = th.textContent.trim();
+        const cls = 'hl-' + name.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/\s+/g, '');
+        HL_MAP[cls] = i;
+        const item = document.createElement('div');
+        item.className = 'multi-select-item';
+        item.innerHTML = '<input type="checkbox" checked value="' + cls + '" onchange="toggleHighlights()"><label>' + name + '</label>';
+        container.appendChild(item);
+      });
+
+      // Tag all numeric cells with hl classes
+      document.querySelectorAll('#modelTable tbody tr').forEach(row => {
+        for (const [cls, colIdx] of Object.entries(HL_MAP)) {
+          const cell = row.cells[colIdx];
+          if (cell) {
+            const spans = cell.querySelectorAll('span[class]');
+            spans.forEach(sp => sp.classList.add('hl', cls));
+            // If no spans but cell has colored content, wrap it
+            if (spans.length === 0 && cell.dataset.val) {
+              const val = parseFloat(cell.dataset.val);
+              if (val > 0) {
+                cell.innerHTML = '<span class="hl ' + cls + ' delta-pos">' + cell.innerHTML + '</span>';
+              } else if (val < 0) {
+                cell.innerHTML = '<span class="hl ' + cls + ' delta-neg">' + cell.innerHTML + '</span>';
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function toggleHighlights() {
+      const checkboxes = document.querySelectorAll('#hlToggleWrap .multi-select-item input[type="checkbox"]');
+      let css = '';
+      checkboxes.forEach(cb => {
+        if (!cb.checked) {
+          css += '.' + cb.value + ' { color: var(--text) !important; }\n';
+        }
+      });
+      document.getElementById('hlOverrides').textContent = css;
+    }
+
+    /* --- Filter Table --- */
+    function filterTable() {
+      const search = document.getElementById('search').value.toLowerCase();
+      const matVals = getSelectedValues('matFilterWrap');
+      const layerVals = getSelectedValues('layerFilterWrap');
+      const folder1Vals = getSelectedValues('folder1FilterWrap');
+      const folder2Vals = getSelectedValues('folder2FilterWrap');
+      const tagVals = getSelectedValues('tagFilterWrap');
+      const minRuns = parseInt(document.getElementById('minRuns').value) || 0;
+      const minJobs = parseInt(document.getElementById('minJobs').value) || 0;
+      const minTotalCost = parseFloat((document.getElementById('minTotalCost') || {}).value) || 0;
+      const minAvgCost = parseFloat((document.getElementById('minAvgCost') || {}).value) || 0;
+      const minDownstreamCost = parseFloat((document.getElementById('minDownstreamCost') || {}).value) || 0;
+
+      const minAvgNewRowsEl = document.getElementById('minAvgNewRows');
+      const minAvgNewRows = minAvgNewRowsEl && minAvgNewRowsEl.value !== '' ? parseFloat(minAvgNewRowsEl.value) : null;
+
+      const minUpstreamTblsEl = document.getElementById('minUpstreamTbls');
+      const minUpstreamTbls = minUpstreamTblsEl && minUpstreamTblsEl.value !== '' ? parseInt(minUpstreamTblsEl.value) : 0;
+
+      const minUpstreamCostEl = document.getElementById('minUpstreamCost');
+      const minUpstreamCost = minUpstreamCostEl && minUpstreamCostEl.value !== '' ? parseFloat(minUpstreamCostEl.value) : 0;
+
+      document.querySelectorAll('#modelTable tbody tr').forEach(row => {
+        const d = row.dataset;
+        const rowTags = (d.tags || '').split(',').filter(t => t);
+        const rowAvgNewRows = d.avgnewrows !== '' ? parseFloat(d.avgnewrows) : null;
+
+        const show =
+          (!search || d.name.includes(search)) &&
+          (matVals.length === 0 || matVals.includes(d.mat)) &&
+          (layerVals.length === 0 || layerVals.includes(d.layer)) &&
+          (folder1Vals.length === 0 || folder1Vals.includes(d.folder1)) &&
+          (folder2Vals.length === 0 || folder2Vals.includes(d.folder2)) &&
+          (tagVals.length === 0 || tagVals.some(t => rowTags.includes(t))) &&
+          (parseInt(d.runs) || 0) >= minRuns &&
+          (parseInt(d.jobs) || 0) >= minJobs &&
+          (parseFloat(d.totalcost) || 0) >= minTotalCost &&
+          (parseFloat(d.avgcost) || 0) >= minAvgCost &&
+          (parseFloat(d.downstreamcost) || 0) >= minDownstreamCost &&
+          (minAvgNewRows === null || (rowAvgNewRows !== null && rowAvgNewRows >= minAvgNewRows)) &&
+          (parseInt(d.upstreamtbls) || 0) >= minUpstreamTbls &&
+          (parseFloat(d.upstreamcost) || 0) >= minUpstreamCost;
+        row.style.display = show ? '' : 'none';
+      });
+    }
+
+    let currentSort = { col: -1, asc: true };
+    function sortTable(col, type) {
+      if (_resizing) return;
+      if (currentSort.col === col) currentSort.asc = !currentSort.asc;
+      else { currentSort.col = col; currentSort.asc = type === 'str'; }
+
+      document.querySelectorAll('#modelTable th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
+      const th = document.querySelector(`#modelTable th[data-col="${col}"]`);
+      if (th) th.classList.add(currentSort.asc ? 'sorted-asc' : 'sorted-desc');
+
+      const tbody = document.querySelector('#modelTable tbody');
+      const rows = Array.from(tbody.rows);
+      rows.sort((a, b) => {
+        if (type === 'num') {
+          const av = parseFloat(a.cells[col].dataset.val || '0');
+          const bv = parseFloat(b.cells[col].dataset.val || '0');
+          return currentSort.asc ? av - bv : bv - av;
+        } else {
+          const av = a.cells[col].textContent.trim().toLowerCase();
+          const bv = b.cells[col].textContent.trim().toLowerCase();
+          return currentSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
+    /* --- Column Resizer --- */
+    let _resizing = false;
+    function initResize(table) {
+      const cols = table.querySelectorAll('thead th');
+      cols.forEach(th => {
+        th.style.position = 'relative';
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          _resizing = true;
+          handle.classList.add('active');
+          const startX = e.pageX;
+          const startW = th.offsetWidth;
+          function onMove(ev) {
+            th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px';
+            th.style.minWidth = th.style.width;
+          }
+          function onUp() {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            setTimeout(() => { _resizing = false; }, 50);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.appendChild(handle);
+      });
+    }
+    document.querySelectorAll('table').forEach(t => initResize(t));
+    initColumnToggle();
+    initHighlightToggle();
+  </script>
+</body>
+</html>

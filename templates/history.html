@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — Run History</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e1e4ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c63ff;
+      --green: #34d399;
+      --red: #f87171;
+      --orange: #fbbf24;
+      --blue: #60a5fa;
+      --cyan: #22d3ee;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav { margin-bottom: 1.5rem; font-size: 0.85rem; }
+    nav a { margin-right: 1.5rem; }
+    nav a.active { color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .summary {
+      display: flex;
+      gap: 1.5rem;
+      margin: 1.5rem 0 2rem;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      min-width: 140px;
+    }
+    .card .label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem; }
+    .card .detail { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="text"], select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    input[type="text"] { width: 280px; }
+    input::placeholder { color: var(--text-muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    th {
+      background: #14161e;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th:hover { color: var(--text); }
+    td {
+      padding: 0.6rem 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    tr:hover td { background: rgba(108, 99, 255, 0.05); }
+    tr.expanded td { background: rgba(108, 99, 255, 0.08); }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-view { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+    .badge-table { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+    .badge-incremental { background: rgba(251, 191, 36, 0.15); color: var(--orange); }
+    .badge-ephemeral { background: rgba(139, 143, 163, 0.15); color: var(--text-muted); }
+    .num { font-variant-numeric: tabular-nums; }
+    .muted { color: var(--text-muted); }
+    .status-success { color: var(--green); }
+    .status-error { color: var(--red); }
+
+    /* Sparkline bars */
+    .spark {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 28px;
+      cursor: pointer;
+    }
+    .spark-bar {
+      width: 6px;
+      min-height: 2px;
+      border-radius: 1px;
+      transition: opacity 0.15s;
+    }
+    .spark-bar.success { background: var(--accent); }
+    .spark-bar.error { background: var(--red); }
+    .spark-bar:hover { opacity: 0.7; }
+
+    /* Expanded detail row */
+    .detail-row td {
+      padding: 0;
+      background: #12141c;
+    }
+    .detail-content {
+      padding: 1rem 1.5rem;
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .detail-content .mini-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      min-width: 100px;
+    }
+    .detail-content .mini-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+    .detail-content .mini-value { font-size: 1rem; font-weight: 600; margin-top: 0.15rem; }
+    .run-list {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .run-list table {
+      font-size: 0.8rem;
+      border-radius: 4px;
+    }
+    .run-list th { font-size: 0.65rem; padding: 0.4rem 0.75rem; }
+    .run-list td { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+    .bar-cell { min-width: 100px; }
+    .bar-container { background: var(--border); border-radius: 3px; height: 6px; width: 100%; }
+    .bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    .bar-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+    .tooltip-wrap { position: relative; }
+    .tooltip-wrap:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2a2d3a;
+      color: var(--text);
+      padding: 0.3rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Current State</a>
+    <a href="/history" class="active">Run History</a>
+  </nav>
+
+  <header>
+    <h1><span>▪</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ run history</span></h1>
+    <div class="subtitle">Aggregated from {{ total_runs }} successful runs over the past 7 days</div>
+  </header>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Runs</div>
+      <div class="value">{{ total_runs }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Models</div>
+      <div class="value">{{ models | length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Slowest (avg)</div>
+      <div class="value" style="font-size:1rem;">
+        {% if models %}{{ "%.2f"|format(models[0].avg_execution_time or 0) }}s{% endif %}
+      </div>
+      <div class="detail">{% if models %}{{ models[0].name }}{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="label">Slowest (max)</div>
+      <div class="value" style="font-size:1rem;">
+        {% set worst_max = models | sort(attribute='max_execution_time', reverse=true) | first %}
+        {% if worst_max %}{{ "%.2f"|format(worst_max.max_execution_time or 0) }}s{% endif %}
+      </div>
+      <div class="detail">{% if worst_max %}{{ worst_max.name }}{% endif %}</div>
+    </div>
+    <div class="card">
+      <div class="label">Total Compute</div>
+      <div class="value" style="font-size:1rem;">
+        {{ "%.0f"|format(models | sum(attribute='total_execution_time') | default(0)) }}s
+      </div>
+      <div class="detail">across all runs</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Filter models..." oninput="filterTable()">
+    <select id="matFilter" onchange="filterTable()">
+      <option value="">All types</option>
+      <option value="table">table</option>
+      <option value="view">view</option>
+      <option value="incremental">incremental</option>
+    </select>
+    <select id="sortField" onchange="sortTable()">
+      <option value="avg" selected>Sort: Avg Time</option>
+      <option value="max">Sort: Max Time</option>
+      <option value="total">Sort: Total Time</option>
+      <option value="runs">Sort: Run Count</option>
+      <option value="name">Sort: Name</option>
+    </select>
+  </div>
+
+  <table id="modelTable">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Type</th>
+        <th>Runs</th>
+        <th>Avg Time</th>
+        <th>Min / Max</th>
+        <th>P50</th>
+        <th>Total Time</th>
+        <th>Trend</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set max_avg = models | map(attribute='avg_execution_time') | select('number') | list | max %}
+      {% for m in models %}
+      <tr class="model-row"
+          data-mat="{{ m.materialized }}"
+          data-name="{{ m.name | lower }}"
+          data-avg="{{ m.avg_execution_time or 0 }}"
+          data-max="{{ m.max_execution_time or 0 }}"
+          data-total="{{ m.total_execution_time or 0 }}"
+          data-runs="{{ m.total_runs }}"
+          onclick="toggleDetail('{{ m.unique_id | replace('.', '-') }}')">
+        <td>
+          <div style="font-weight: 500;">{{ m.name }}</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);">{{ m.database }}.{{ m.schema }}</div>
+        </td>
+        <td><span class="badge badge-{{ m.materialized }}">{{ m.materialized }}</span></td>
+        <td class="num">{{ m.total_runs }}</td>
+        <td class="bar-cell">
+          {% if m.avg_execution_time is not none %}
+          <div class="bar-container">
+            <div class="bar-fill" style="width: {{ (m.avg_execution_time / max_avg * 100) if max_avg else 0 }}%"></div>
+          </div>
+          <div class="bar-label">{{ "%.2f"|format(m.avg_execution_time) }}s</div>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if m.min_execution_time is not none %}
+          {{ "%.2f"|format(m.min_execution_time) }}s / {{ "%.2f"|format(m.max_execution_time) }}s
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if m.p50_execution_time is not none %}{{ "%.2f"|format(m.p50_execution_time) }}s{% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if m.total_execution_time is not none %}{{ "%.1f"|format(m.total_execution_time) }}s{% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>
+          <div class="spark">
+            {% set max_hist = m.execution_history | map(attribute='time') | select('number') | list | max %}
+            {% for h in m.execution_history %}
+            <div class="spark-bar {{ h.status }}"
+                 style="height: {{ ((h.time / max_hist * 100) if max_hist and h.time else 5) | round }}%"
+                 title="{{ h.run_at }} — {{ '%.2f' | format(h.time or 0) }}s"></div>
+            {% endfor %}
+          </div>
+        </td>
+        <td>
+          <span class="status-success">{{ m.success_count }}✓</span>
+          {% if m.error_count %}<span class="status-error" style="margin-left:4px;">{{ m.error_count }}✗</span>{% endif %}
+        </td>
+      </tr>
+      <tr class="detail-row" id="detail-{{ m.unique_id | replace('.', '-') }}" style="display:none;">
+        <td colspan="9">
+          <div class="detail-content">
+            <div class="run-list">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Run</th>
+                    <th>Time</th>
+                    <th>Execution</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for h in m.execution_history | reverse %}
+                  <tr>
+                    <td class="num">{{ h.run_at }}</td>
+                    <td>
+                      {% if h.time is not none %}
+                      <div class="bar-container" style="width:80px; display:inline-block; vertical-align:middle;">
+                        <div class="bar-fill" style="width: {{ ((h.time / m.max_execution_time * 100) if m.max_execution_time else 0) | round }}%"></div>
+                      </div>
+                      {% endif %}
+                    </td>
+                    <td class="num">{{ "%.2f"|format(h.time or 0) }}s</td>
+                    <td><span class="status-{{ h.status }}">{{ h.status }}</span></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    function filterTable() {
+      const search = document.getElementById('search').value.toLowerCase();
+      const mat = document.getElementById('matFilter').value;
+      document.querySelectorAll('#modelTable tbody tr.model-row').forEach(row => {
+        const name = row.dataset.name;
+        const type = row.dataset.mat;
+        const matchSearch = !search || name.includes(search);
+        const matchMat = !mat || type === mat;
+        const show = matchSearch && matchMat;
+        row.style.display = show ? '' : 'none';
+        const detailId = row.nextElementSibling?.id;
+        if (detailId?.startsWith('detail-')) {
+          row.nextElementSibling.style.display = 'none';
+          row.classList.remove('expanded');
+        }
+      });
+    }
+
+    function sortTable() {
+      const field = document.getElementById('sortField').value;
+      const tbody = document.querySelector('#modelTable tbody');
+      const rowPairs = [];
+      const rows = Array.from(tbody.querySelectorAll('tr.model-row'));
+
+      rows.forEach(row => {
+        const detail = row.nextElementSibling;
+        rowPairs.push([row, detail]);
+      });
+
+      rowPairs.sort((a, b) => {
+        const ra = a[0], rb = b[0];
+        if (field === 'name') return ra.dataset.name.localeCompare(rb.dataset.name);
+        return parseFloat(rb.dataset[field] || 0) - parseFloat(ra.dataset[field] || 0);
+      });
+
+      rowPairs.forEach(([row, detail]) => {
+        tbody.appendChild(row);
+        if (detail) tbody.appendChild(detail);
+      });
+    }
+
+    function toggleDetail(id) {
+      const el = document.getElementById('detail-' + id);
+      const row = el.previousElementSibling;
+      if (el.style.display === 'none') {
+        el.style.display = '';
+        row.classList.add('expanded');
+      } else {
+        el.style.display = 'none';
+        row.classList.remove('expanded');
+      }
+    }
+  </script>
+</body>
+</html>

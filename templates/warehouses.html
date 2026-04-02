@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouse Config — {{ env_name }}</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e1e4ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c63ff;
+      --green: #34d399;
+      --orange: #fbbf24;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      max-width: 900px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+    h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 2rem; }
+    .nav-links {
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1.5rem;
+    }
+    .info-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    .info-box strong { color: var(--accent); }
+    .cost-table {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+      border-collapse: collapse;
+      width: auto;
+      background: transparent;
+      border: none;
+    }
+    .cost-table td { padding: 0.15rem 0.75rem 0.15rem 0; border: none; }
+    .cost-table td:first-child { font-weight: 600; color: var(--text); background: transparent; }
+    .cost-table th {
+      padding: 0.15rem 0.75rem 0.15rem 0;
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+    }
+    table.main-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .main-table th {
+      background: #14161e;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .main-table td {
+      padding: 0.65rem 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .wh-name { font-weight: 600; }
+    .wh-default { color: var(--green); font-size: 0.7rem; font-weight: 600; }
+    .wh-override { color: var(--orange); font-size: 0.7rem; font-weight: 600; }
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      min-width: 200px;
+    }
+    select:focus { border-color: var(--accent); outline: none; }
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/setup">Setup</a>
+  </div>
+
+  <h1><span>&#9642;</span> Warehouse Size Mapping</h1>
+  <div class="subtitle">{{ env_name }} — Map each warehouse to its size tier for cost estimation</div>
+
+  <div class="info-box">
+    <strong>Cost model:</strong> Set the base cost per second for the smallest tier below. Each size tier doubles the rate.
+    <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.75rem;">
+      <label style="font-weight: 600; white-space: nowrap;">Base cost per second: $</label>
+      <input type="number" name="base_cost" form="wh-form" step="0.00001" min="0"
+             value="{{ current_base_cost }}"
+             style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;color:var(--text);font-size:0.85rem;width:120px;">
+      <span style="color:var(--text-muted);font-size:0.75rem;">(default: ${{ "%.5f"|format(default_base_cost) }})</span>
+    </div>
+    <table class="cost-table" id="costPreview">
+    </table>
+    <script>
+      function updatePreview() {
+        const base = parseFloat(document.querySelector('input[name="base_cost"]').value) || 0;
+        const sizes = [
+          {id: 'XS',  sf: 'XS',  db: '2XS', mult: 1},
+          {id: 'S',   sf: 'S',   db: 'XS',  mult: 2},
+          {id: 'M',   sf: 'M',   db: 'S',   mult: 4},
+          {id: 'L',   sf: 'L',   db: 'M',   mult: 8},
+          {id: 'XL',  sf: 'XL',  db: 'L',   mult: 16},
+          {id: '2XL', sf: '2XL', db: 'XL',  mult: 32},
+          {id: '3XL', sf: '3XL', db: '2XL', mult: 64},
+          {id: '4XL', sf: '4XL', db: '3XL', mult: 128}
+        ];
+        const tbody = document.getElementById('costPreview');
+        let html = '<tr><th>Snowflake</th><th>Databricks</th><th>Multiplier</th><th>$/sec</th><th>$/min</th><th>$/hr</th></tr>';
+        html += sizes.map(s => {
+          const perSec = base * s.mult;
+          const perMin = perSec * 60;
+          const perHr = perSec * 3600;
+          return `<tr><td>${s.sf}</td><td>${s.db}</td><td>${s.mult}x</td><td>$${perSec.toFixed(5)}</td><td>$${perMin.toFixed(3)}</td><td>$${perHr.toFixed(2)}</td></tr>`;
+        }).join('');
+        tbody.innerHTML = html;
+      }
+      document.querySelector('input[name="base_cost"]').addEventListener('input', updatePreview);
+      updatePreview();
+    </script>
+  </div>
+
+  <form id="wh-form" action="/warehouses/save" method="POST">
+    <input type="hidden" name="env_key" value="{{ env_key }}">
+
+    <table class="main-table">
+      <thead>
+        <tr>
+          <th>Warehouse</th>
+          <th>Role</th>
+          <th>Models Using</th>
+          <th>Mapped Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wh_name, info in warehouses.items() | sort %}
+        <tr>
+          <td class="wh-name">{{ wh_name }}</td>
+          <td>
+            {% if info.is_default %}<span class="wh-default">CONNECTION DEFAULT</span>
+            {% else %}<span class="wh-override">MODEL OVERRIDE</span>{% endif %}
+          </td>
+          <td>{{ info.count }}</td>
+          <td>
+            <select name="size_{{ wh_name }}">
+              {% for size in sizes %}
+              <option value="{{ size.id }}" {% if current_mapping.get(wh_name) == size.id %}selected{% endif %}>{{ size.snowflake }} (Snowflake) / {{ size.databricks }} (Databricks) — {{ size.multiplier }}x</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <button type="submit" class="btn">Save & Apply Costs</button>
+  </form>
+</body>
+</html>
