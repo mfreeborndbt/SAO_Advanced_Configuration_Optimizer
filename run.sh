@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-# SAO YAML Optimizer — one-command launcher
+# SAO Advanced Configuration Optimizer — one-command launcher
 # Usage: ./run.sh
 
 PYTHON=${PYTHON:-python3}
@@ -36,7 +36,7 @@ elif command -v xdg-open &>/dev/null; then
 fi
 
 echo ""
-echo "  SAO YAML Optimizer"
+echo "  SAO Advanced Configuration Optimizer"
 echo "  ------------------"
 echo "  Running at: $URL"
 echo "  Stop with:  Ctrl+C"

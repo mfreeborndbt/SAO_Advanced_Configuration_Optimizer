@@ -87,6 +87,9 @@ def load_credentials():
         # Validate that required keys are present
         required = ["host_url", "discovery_url", "account_id", "project_id", "environment_id", "token"]
         if all(data.get(k) for k in required):
+            # Backfill account_prefix for credentials saved before this field existed
+            if not data.get("account_prefix"):
+                data["account_prefix"] = data["host_url"].split(".")[0]
             return data
     return None
 
@@ -95,24 +98,15 @@ def save_credentials(data):
     """Write credentials to config/credentials.json."""
     os.makedirs(CREDENTIALS_DIR, exist_ok=True)
 
-    # Clean up common URL mistakes
-    host = data.get("host_url", "").strip().rstrip("/")
-    host = host.replace("https://", "").replace("http://", "")
-    data["host_url"] = host
-
-    disc = data.get("discovery_url", "").strip().rstrip("/")
-    if disc and not disc.endswith("/graphql"):
-        disc = disc + "/graphql"
-    data["discovery_url"] = disc
-
     # Strip whitespace from all string fields
-    for k in ["account_id", "project_id", "environment_id", "token"]:
+    for k in ["account_prefix", "host_url", "discovery_url", "account_id", "project_id", "environment_id", "token"]:
         if data.get(k):
-            data[k] = data[k].strip()
+            data[k] = str(data[k]).strip()
 
-    # Auto-generate a name from the account URL
+    # Auto-generate a name from the account prefix
     if not data.get("name"):
-        data["name"] = host.split(".")[0] if "." in host else host
+        prefix = data.get("account_prefix") or data.get("host_url", "").split(".")[0]
+        data["name"] = prefix
 
     with open(CREDENTIALS_PATH, "w") as f:
         json.dump(data, f, indent=2)

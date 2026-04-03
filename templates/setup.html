@@ -165,15 +165,9 @@
 
   <form action="/setup/save" method="POST">
     <div class="form-group">
-      <label>Account URL</label>
-      <input type="text" name="host_url" value="{{ creds.host_url if creds else '' }}" placeholder="e.g. abc123.us1.dbt.com">
-      <div class="hint">Found in your browser URL bar when logged into dbt Cloud. Just the domain, no https:// or trailing slash.</div>
-    </div>
-
-    <div class="form-group">
-      <label>Discovery API URL</label>
-      <input type="text" name="discovery_url" value="{{ creds.discovery_url if creds else '' }}" placeholder="e.g. https://abc123.metadata.us1.dbt.com/graphql">
-      <div class="hint">Replace "abc123" with your account prefix and region. The path /graphql will be added automatically if missing.</div>
+      <label>Account Prefix</label>
+      <input type="text" name="account_prefix" value="{{ creds.account_prefix if creds else '' }}" placeholder="e.g. abc123">
+      <div class="hint">The subdomain of your dbt Cloud URL — just the prefix before <code>.us1.dbt.com</code>. All accounts are on us1.</div>
     </div>
 
     <div class="form-row">

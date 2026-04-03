@@ -171,9 +171,14 @@ def setup():
 
 @app.route("/setup/save", methods=["POST"])
 def setup_save():
+    prefix = request.form.get("account_prefix", "").strip().lower()
+    # Strip any accidentally pasted full URL down to just the prefix
+    prefix = prefix.replace("https://", "").replace("http://", "").split(".")[0]
+
     data = {
-        "host_url": request.form.get("host_url", "").strip(),
-        "discovery_url": request.form.get("discovery_url", "").strip(),
+        "account_prefix": prefix,
+        "host_url": f"{prefix}.us1.dbt.com" if prefix else "",
+        "discovery_url": f"https://{prefix}.metadata.us1.dbt.com/graphql" if prefix else "",
         "account_id": request.form.get("account_id", "").strip(),
         "project_id": request.form.get("project_id", "").strip(),
         "environment_id": request.form.get("environment_id", "").strip(),
@@ -184,10 +189,10 @@ def setup_save():
     if not data["token"] and existing:
         data["token"] = existing["token"]
 
-    if data["host_url"]:
-        data["name"] = data["host_url"].split(".")[0] if "." in data["host_url"] else data["host_url"]
+    if prefix:
+        data["name"] = prefix
 
-    required = ["host_url", "discovery_url", "account_id", "project_id", "environment_id", "token"]
+    required = ["account_prefix", "account_id", "project_id", "environment_id", "token"]
     missing = [k for k in required if not data.get(k)]
     if missing:
         flash(f"Missing required fields: {', '.join(missing)}", "error")
