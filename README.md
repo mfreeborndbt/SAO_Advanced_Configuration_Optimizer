@@ -14,7 +14,7 @@ A local observability dashboard for dbt Cloud that surfaces model-level executio
 
 ```bash
 git clone https://github.com/mfreeborndbt/SAO_Advanced_Configuration_Optimizer.git
-cd SAO_YAML_Optimizer
+cd SAO_Advanced_Configuration_Optimizer
 ./run.sh
 ```
 
@@ -28,7 +28,7 @@ That's it. The script:
 
 ## Setup flow
 
-1. **API credentials** — Enter your dbt Cloud account URL, Discovery API URL, Account ID, Project ID, Production Environment ID, and a service token with read + metadata access
+1. **API credentials** — Enter your dbt Cloud account prefix, Account ID, Project ID, Production Environment ID, and a service token with read + metadata access
 2. **Warehouse costs** — Map each warehouse name to a Snowflake/Databricks size tier (XS → 4XL) and set your base cost per second
 3. **Dashboard** — Explore model stats, filter, and sort. Then check the Recommendations tab for tuning suggestions
 
@@ -36,8 +36,7 @@ That's it. The script:
 
 | Field | Where to find it |
 |---|---|
-| Account URL | Your browser URL when logged in: `abc123.us1.dbt.com` |
-| Discovery API URL | Same prefix + `.metadata`: `https://abc123.metadata.us1.dbt.com/graphql` |
+| Account Prefix | The subdomain of your dbt Cloud URL: `abc123` from `abc123.us1.dbt.com` |
 | Account ID | dbt Cloud URL: `/deploy/{account_id}/...` |
 | Project ID | dbt Cloud URL: `/projects/{project_id}/...` |
 | Environment ID | Your production deployment environment ID |

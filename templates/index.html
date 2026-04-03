@@ -317,6 +317,8 @@
 
     <input type="text" id="search" placeholder="Filter models..." oninput="filterTable()">
 
+    <button onclick="exportCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.85rem;color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Export CSV</button>
+
     <div class="multi-select" id="matFilterWrap">
       <div class="multi-select-btn" onclick="toggleDropdown('matFilterWrap')">All types</div>
       <div class="multi-select-dropdown">
@@ -812,6 +814,39 @@
     document.querySelectorAll('table').forEach(t => initResize(t));
     initColumnToggle();
     initHighlightToggle();
+
+    /* --- CSV Export --- */
+    function exportCSV() {
+      const table = document.getElementById('modelTable');
+      const headers = [];
+      const colVisible = [];
+      table.querySelectorAll('thead th').forEach((th, i) => {
+        const visible = th.style.display !== 'none';
+        colVisible.push(visible);
+        if (visible) headers.push('"' + th.textContent.trim().replace(/"/g, '""') + '"');
+      });
+
+      const rows = [headers.join(',')];
+      table.querySelectorAll('tbody tr').forEach(row => {
+        if (row.style.display === 'none') return;
+        const cells = [];
+        Array.from(row.cells).forEach((td, i) => {
+          if (!colVisible[i]) return;
+          // Use data-val for numeric cells, plain text for others
+          let val = td.dataset.val !== undefined ? td.dataset.val : td.textContent.trim().replace(/\s+/g, ' ');
+          cells.push('"' + String(val).replace(/"/g, '""') + '"');
+        });
+        rows.push(cells.join(','));
+      });
+
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sao_model_data.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   </script>
 </body>
 </html>
