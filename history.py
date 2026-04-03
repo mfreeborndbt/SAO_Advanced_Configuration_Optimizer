@@ -405,6 +405,26 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
 
     print(f"[{client.name}] Processed {len(runs)} runs, found {len(model_history)} table/incremental models with successful builds")
 
+    # Compute project-level top 5 jobs by total runs (irrespective of model)
+    total_runs_per_job = defaultdict(int)
+    for run in runs:
+        total_runs_per_job[run["job_definition_id"]] += 1
+    top_project_jobs = sorted(total_runs_per_job.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    top_project_jobs_info = []
+    for jid, total in top_project_jobs:
+        jinfo = scheduled_jobs.get(jid, {})
+        top_project_jobs_info.append({
+            "id": jid,
+            "name": jinfo.get("name", f"Job {jid}"),
+            "cadence": jinfo.get("cadence", "—"),
+            "sao_enabled": jinfo.get("sao_enabled", False),
+            "total_runs": total,
+        })
+    # Pad to 5 entries for consistent column count
+    while len(top_project_jobs_info) < 5:
+        top_project_jobs_info.append({"id": None, "name": "", "cadence": "", "sao_enabled": False, "total_runs": 0})
+
     # Compute aggregates — only for models that still exist in applied state
     aggregated = []
     for uid, info in model_history.items():
@@ -449,6 +469,23 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
                 return "—"
             return scheduled_jobs.get(jid, {}).get("cadence", "—")
 
+        def _job_name(jid):
+            if jid is None:
+                return ""
+            return scheduled_jobs.get(jid, {}).get("name", "")
+
+        def _job_sao(jid):
+            if jid is None:
+                return None
+            return scheduled_jobs.get(jid, {}).get("sao_enabled", False)
+
+        # Per-model runs in each of the top project-level jobs
+        proj_job_runs = []
+        for pj_id, _ in top_project_jobs:
+            proj_job_runs.append(info["runs_per_job"].get(pj_id, 0))
+        while len(proj_job_runs) < 5:
+            proj_job_runs.append(0)
+
         model_wh = applied.get("snowflake_warehouse")
         warehouse = model_wh or default_warehouse
 
@@ -473,12 +510,19 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             "total_runs": len(info["runs"]),
             "max_daily_runs": max_daily_runs,
             "num_jobs": len(info["job_ids"]),
+            "job1_name": _job_name(job1_id),
             "job1_runs": job1_runs,
             "job1_cadence": _job_cadence(job1_id),
+            "job1_sao": _job_sao(job1_id),
+            "job2_name": _job_name(job2_id),
             "job2_runs": job2_runs,
             "job2_cadence": _job_cadence(job2_id),
+            "job2_sao": _job_sao(job2_id),
+            "job3_name": _job_name(job3_id),
             "job3_runs": job3_runs,
             "job3_cadence": _job_cadence(job3_id),
+            "job3_sao": _job_sao(job3_id),
+            "proj_job_runs": proj_job_runs,
             "avg_execution_time": sum(exec_times) / len(exec_times) if exec_times else None,
             "max_execution_time": max(exec_times) if exec_times else None,
             "min_execution_time": min(exec_times) if exec_times else None,
@@ -562,4 +606,4 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         "disabled_jobs": disabled_jobs,
     }
 
-    return project_name, aggregated, len(runs), high_cost_ids, sao_status
+    return project_name, aggregated, len(runs), high_cost_ids, sao_status, top_project_jobs_info

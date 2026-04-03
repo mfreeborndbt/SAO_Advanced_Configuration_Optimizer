@@ -450,32 +450,47 @@
         <th data-col="11" onclick="sortTable(11, 'num')">Runs</th>
         <th data-col="12" onclick="sortTable(12, 'num')">Max Daily</th>
         <th data-col="13" onclick="sortTable(13, 'num')">Jobs</th>
-        <th data-col="14" onclick="sortTable(14, 'num')">Job #1</th>
-        <th data-col="15" onclick="sortTable(15, 'str')">J1 Schedule</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">Job #2</th>
-        <th data-col="17" onclick="sortTable(17, 'str')">J2 Schedule</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Job #3</th>
-        <th data-col="19" onclick="sortTable(19, 'str')">J3 Schedule</th>
-        <th data-col="20" onclick="sortTable(20, 'num')">Total Time</th>
-        <th data-col="21" onclick="sortTable(21, 'num')">Avg Time</th>
-        <th data-col="22" onclick="sortTable(22, 'num')">Min</th>
-        <th data-col="23" onclick="sortTable(23, 'num')">Max</th>
-        <th data-col="24" onclick="sortTable(24, 'num')">Total Cost</th>
-        <th data-col="25" onclick="sortTable(25, 'num')">Avg Cost</th>
-        <th data-col="26" onclick="sortTable(26, 'num')">Min Cost</th>
-        <th data-col="27" onclick="sortTable(27, 'num')">Max Cost</th>
-        <th data-col="28" onclick="sortTable(28, 'num')">Rows (start)</th>
-        <th data-col="29" onclick="sortTable(29, 'num')">Rows (now)</th>
-        <th data-col="30" onclick="sortTable(30, 'num')">Row Delta</th>
-        <th data-col="31" onclick="sortTable(31, 'num')">Runs w/ Change</th>
-        <th data-col="32" onclick="sortTable(32, 'num')">Change %</th>
-        <th data-col="33" onclick="sortTable(33, 'num')">Avg New Rows</th>
-        <th data-col="34" onclick="sortTable(34, 'num')">Columns</th>
-        <th data-col="35" onclick="sortTable(35, 'num')">Values</th>
-        <th data-col="36" onclick="sortTable(36, 'num')">Upstream Tbls</th>
-        <th data-col="37" onclick="sortTable(37, 'num')">Upstream Avg Cost</th>
-        <th data-col="38" onclick="sortTable(38, 'num')">Downstream Tbls</th>
-        <th data-col="39" onclick="sortTable(39, 'num')">Downstream Avg Cost</th>
+        <!-- Per-model top 3 jobs (by this model's runs) -->
+        <th data-col="14" onclick="sortTable(14, 'str')">MJ1 Name</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">MJ1 Runs</th>
+        <th data-col="16" onclick="sortTable(16, 'str')">MJ1 Sched</th>
+        <th data-col="17" onclick="sortTable(17, 'str')">MJ1 SAO</th>
+        <th data-col="18" onclick="sortTable(18, 'str')">MJ2 Name</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">MJ2 Runs</th>
+        <th data-col="20" onclick="sortTable(20, 'str')">MJ2 Sched</th>
+        <th data-col="21" onclick="sortTable(21, 'str')">MJ2 SAO</th>
+        <th data-col="22" onclick="sortTable(22, 'str')">MJ3 Name</th>
+        <th data-col="23" onclick="sortTable(23, 'num')">MJ3 Runs</th>
+        <th data-col="24" onclick="sortTable(24, 'str')">MJ3 Sched</th>
+        <th data-col="25" onclick="sortTable(25, 'str')">MJ3 SAO</th>
+        <!-- Project-level top 5 jobs (by total runs across all models) -->
+        {% for pj in project_jobs %}
+        <th data-col="{{ 26 + loop.index0 }}" onclick="sortTable({{ 26 + loop.index0 }}, 'num')" title="{% if pj.name %}{{ pj.name }} — {{ pj.total_runs }} total runs{% if pj.sao_enabled %}, SAO on{% endif %}{% endif %}">{% if pj.name %}Env J{{ loop.index }}: {{ pj.name }}{% else %}Env J{{ loop.index }}{% endif %}</th>
+        {% endfor %}
+        <!-- Time -->
+        <th data-col="31" onclick="sortTable(31, 'num')">Total Time</th>
+        <th data-col="32" onclick="sortTable(32, 'num')">Avg Time</th>
+        <th data-col="33" onclick="sortTable(33, 'num')">Min Time</th>
+        <th data-col="34" onclick="sortTable(34, 'num')">Max Time</th>
+        <!-- Cost -->
+        <th data-col="35" onclick="sortTable(35, 'num')">Total Cost</th>
+        <th data-col="36" onclick="sortTable(36, 'num')">Avg Cost</th>
+        <th data-col="37" onclick="sortTable(37, 'num')">Min Cost</th>
+        <th data-col="38" onclick="sortTable(38, 'num')">Max Cost</th>
+        <!-- Rows -->
+        <th data-col="39" onclick="sortTable(39, 'num')">Rows (start)</th>
+        <th data-col="40" onclick="sortTable(40, 'num')">Rows (now)</th>
+        <th data-col="41" onclick="sortTable(41, 'num')">Row Delta</th>
+        <th data-col="42" onclick="sortTable(42, 'num')">Runs w/ Change</th>
+        <th data-col="43" onclick="sortTable(43, 'num')">Change %</th>
+        <th data-col="44" onclick="sortTable(44, 'num')">Avg New Rows</th>
+        <!-- Other -->
+        <th data-col="45" onclick="sortTable(45, 'num')">Columns</th>
+        <th data-col="46" onclick="sortTable(46, 'num')">Values</th>
+        <th data-col="47" onclick="sortTable(47, 'num')">Upstream Tbls</th>
+        <th data-col="48" onclick="sortTable(48, 'num')">Upstream Avg Cost</th>
+        <th data-col="49" onclick="sortTable(49, 'num')">Downstream Tbls</th>
+        <th data-col="50" onclick="sortTable(50, 'num')">Downstream Avg Cost</th>
       </tr>
     </thead>
     <tbody>
@@ -514,12 +529,26 @@
         <td class="num" data-val="{{ m.num_jobs }}">
           {% if m.num_jobs > 1 %}<span class="jobs-warn">{{ m.num_jobs }}</span>{% else %}{{ m.num_jobs }}{% endif %}
         </td>
+        <!-- Per-model Job 1 -->
+        <td><span style="font-size:0.7rem;">{{ m.job1_name }}</span></td>
         <td class="num" data-val="{{ m.job1_runs }}">{{ m.job1_runs }}</td>
         <td><span style="font-size:0.7rem;">{{ m.job1_cadence }}</span></td>
+        <td>{% if m.job1_sao is not none %}{% if m.job1_sao %}<span style="color:var(--green);font-size:0.7rem;font-weight:600;">ON</span>{% else %}<span class="muted" style="font-size:0.7rem;">OFF</span>{% endif %}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <!-- Per-model Job 2 -->
+        <td>{% if m.job2_runs %}<span style="font-size:0.7rem;">{{ m.job2_name }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
         <td class="num" data-val="{{ m.job2_runs }}">{% if m.job2_runs %}<span class="jobs-warn">{{ m.job2_runs }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
         <td>{% if m.job2_runs %}<span style="font-size:0.7rem;">{{ m.job2_cadence }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td>{% if m.job2_sao is not none and m.job2_runs %}{% if m.job2_sao %}<span style="color:var(--green);font-size:0.7rem;font-weight:600;">ON</span>{% else %}<span class="muted" style="font-size:0.7rem;">OFF</span>{% endif %}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <!-- Per-model Job 3 -->
+        <td>{% if m.job3_runs %}<span style="font-size:0.7rem;">{{ m.job3_name }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
         <td class="num" data-val="{{ m.job3_runs }}">{% if m.job3_runs %}<span class="jobs-warn">{{ m.job3_runs }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
         <td>{% if m.job3_runs %}<span style="font-size:0.7rem;">{{ m.job3_cadence }}</span>{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td>{% if m.job3_sao is not none and m.job3_runs %}{% if m.job3_sao %}<span style="color:var(--green);font-size:0.7rem;font-weight:600;">ON</span>{% else %}<span class="muted" style="font-size:0.7rem;">OFF</span>{% endif %}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <!-- Project-level top 5 jobs -->
+        {% for pj_runs in m.proj_job_runs %}
+        <td class="num" data-val="{{ pj_runs }}">{% if pj_runs %}<span class="jobs-warn">{{ pj_runs }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
+        {% endfor %}
+        <!-- Time -->
         <td class="num" data-val="{{ m.total_execution_time or 0 }}">
           {{ m.total_execution_time | duration }}
         </td>
@@ -532,10 +561,12 @@
         <td class="num" data-val="{{ m.max_execution_time or 0 }}">
           {{ m.max_execution_time | duration }}
         </td>
+        <!-- Cost -->
         <td class="num" data-val="{{ m.total_cost or 0 }}">{% if has_costs %}{{ m.total_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
         <td class="num" data-val="{{ m.avg_cost or 0 }}">{% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
         <td class="num" data-val="{{ m.min_cost or 0 }}">{% if has_costs %}{{ m.min_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
         <td class="num" data-val="{{ m.max_cost or 0 }}">{% if has_costs %}{{ m.max_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <!-- Rows -->
         <td class="num" data-val="{{ m.earliest_rows or 0 }}">
           {% if m.earliest_rows is not none %}{{ "{:,}".format(m.earliest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
@@ -562,6 +593,7 @@
         <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
           {% if m.avg_new_rows is not none %}<span class="hl hl-avgnewrows {% if m.avg_new_rows > 0 %}delta-pos{% elif m.avg_new_rows < 0 %}delta-neg{% else %}delta-zero{% endif %}">{{ "{:,.0f}".format(m.avg_new_rows) }}</span>{% else %}<span class="muted">--</span>{% endif %}
         </td>
+        <!-- Other -->
         <td class="num" data-val="{{ m.column_count }}">{{ m.column_count or '--' }}</td>
         <td class="num" data-val="{{ m.total_values or 0 }}">
           {% if m.total_values is not none %}{{ "{:,}".format(m.total_values) }}{% else %}<span class="muted">--</span>{% endif %}
