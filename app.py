@@ -79,7 +79,7 @@ def _load_models_with_costs():
     env_key = _env_key_from_config()
     client = get_client_from_config()
 
-    project_name, models, total_runs, high_cost_ids, sao_status = build_aggregate(
+    project_name, models, total_runs, high_cost_ids, sao_status, top_project_jobs = build_aggregate(
         client, days=7, max_models=500,
     )
 
@@ -102,7 +102,7 @@ def _load_models_with_costs():
                 m["upstream_avg_cost"] = sum(costs) if costs else None
 
     account_name = creds.get("name", "")
-    return project_name, models, total_runs, has_costs, env_key, account_name, sao_status
+    return project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs
 
 
 @app.route("/")
@@ -111,7 +111,7 @@ def index():
     if result is None:
         return redirect(url_for("setup"))
 
-    project_name, models, total_runs, has_costs, env_key, account_name, sao_status = result
+    project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
 
     return render_template(
         "index.html",
@@ -121,6 +121,7 @@ def index():
         models=models,
         total_runs=total_runs,
         has_costs=has_costs,
+        project_jobs=top_project_jobs,
         active_tab="dashboard",
     )
 
@@ -131,7 +132,7 @@ def recommendations():
     if result is None:
         return redirect(url_for("setup"))
 
-    project_name, models, total_runs, has_costs, env_key, account_name, sao_status = result
+    project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
 
     recs = generate_recommendations(models, has_costs, sao_status=sao_status)
 
