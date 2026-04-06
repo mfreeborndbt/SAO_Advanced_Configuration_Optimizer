@@ -10,7 +10,7 @@ A local observability dashboard for dbt Cloud that surfaces model-level executio
 
 ## Quick start
 
-**Requirements:** Python 3.8+, a dbt Cloud account with read + metadata access token
+**Requirements:** Python 3.8+, a dbt Cloud account with read + metadata access token **(Admin API access may be needed, still testing this out)**
 
 ```bash
 git clone https://github.com/mfreeborndbt/SAO_Advanced_Configuration_Optimizer.git
