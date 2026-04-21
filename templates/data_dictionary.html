@@ -88,7 +88,7 @@
 </head>
 <body>
   <nav class="tab-nav">
-    <a href="/" class="tab">Dashboard</a>
+    <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab active">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
@@ -295,15 +295,17 @@ document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(functio
     this.style.opacity = '0.5';
     var overlay = document.getElementById('loadingOverlay');
     var lt = overlay ? overlay.querySelector('.loading-text') : null;
+    var sub = overlay ? overlay.querySelector('.loading-sub') : null;
     if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
-    if (overlay) window._loadTimer = setTimeout(function() {
-      overlay.style.display = 'flex';
-      var start = Date.now();
-      window._elapsedTimer = setInterval(function() {
-        var el = document.getElementById('loadElapsed');
-        if (el) el.textContent = Math.floor((Date.now() - start) / 1000) + 's';
-      }, 1000);
-    }, 3000);
+    if (sub) sub.style.display = 'none';
+    if (overlay) overlay.style.display = 'flex';
+    var start = Date.now();
+    window._elapsedTimer = setInterval(function() {
+      var elapsed = Math.floor((Date.now() - start) / 1000);
+      if (elapsed >= 3 && sub) sub.style.display = '';
+      var el = document.getElementById('loadElapsed');
+      if (el) el.textContent = elapsed + 's';
+    }, 1000);
   });
 });
 </script>
