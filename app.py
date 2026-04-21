@@ -2,7 +2,8 @@ import os
 import re
 from flask import Flask, render_template, request, redirect, url_for, flash
 from discovery_client import load_credentials, save_credentials, get_client_from_config
-from history import build_aggregate
+from history import build_aggregate, build_job_analysis, fetch_latest_test_results
+from model_details import fetch_model_details
 from warehouse_config import (
     discover_warehouses,
     get_warehouse_config,
@@ -11,7 +12,6 @@ from warehouse_config import (
     WAREHOUSE_SIZES,
     DEFAULT_BASE_COST,
 )
-from recommendation_engine import generate_recommendations
 
 app = Flask(__name__)
 app.secret_key = "dbt-observability-setup-key"
@@ -66,11 +66,23 @@ app.jinja_env.filters["duration"] = fmt_duration
 app.jinja_env.filters["cost"] = fmt_cost
 
 
-def _load_models_with_costs():
-    """Shared data loader for dashboard and recommendations.
+@app.errorhandler(500)
+def handle_500(e):
+    flash(f"Something went wrong: {e}. Try again or check your credentials.", "error")
+    return redirect(url_for("setup"))
 
-    Returns (project_name, models, total_runs, has_costs, env_key, account_name)
+
+class ApiAuthError(Exception):
+    """Raised when API calls fail due to authentication issues."""
+    pass
+
+
+def _load_models_with_costs():
+    """Shared data loader for dashboard and optimization tabs.
+
+    Returns (project_name, models, total_runs, has_costs, env_key, account_name, sao_status)
     or None if not configured.
+    Raises ApiAuthError if the API returns 401/403.
     """
     creds = load_credentials()
     if creds is None:
@@ -79,9 +91,17 @@ def _load_models_with_costs():
     env_key = _env_key_from_config()
     client = get_client_from_config()
 
-    project_name, models, total_runs, high_cost_ids, sao_status, top_project_jobs = build_aggregate(
-        client, days=7, max_models=500,
-    )
+    try:
+        project_name, models, total_runs, high_cost_ids, sao_status, top_project_jobs = build_aggregate(
+            client, days=7, max_models=500,
+        )
+    except Exception as e:
+        err = str(e)
+        if "401" in err or "403" in err or "Unauthorized" in err or "Forbidden" in err:
+            raise ApiAuthError(err)
+        if "429" in err or "Too Many Requests" in err:
+            raise ApiAuthError("Rate limited by dbt Cloud API. Please wait a moment and try again.")
+        raise
 
     wh_config = get_warehouse_config(env_key)
     mapping = wh_config["mapping"]
@@ -107,7 +127,11 @@ def _load_models_with_costs():
 
 @app.route("/")
 def index():
-    result = _load_models_with_costs()
+    try:
+        result = _load_models_with_costs()
+    except ApiAuthError:
+        flash("API authentication failed. Please update your service token.", "error")
+        return redirect(url_for("setup"))
     if result is None:
         return redirect(url_for("setup"))
 
@@ -126,41 +150,147 @@ def index():
     )
 
 
-@app.route("/recommendations")
-def recommendations():
-    result = _load_models_with_costs()
+@app.route("/data-dictionary")
+def data_dictionary():
+    creds = load_credentials()
+    project_name = creds.get("name", "Project") if creds else "Project"
+    return render_template(
+        "data_dictionary.html",
+        project_name=project_name,
+        active_tab="data_dictionary",
+    )
+
+
+@app.route("/models-optimization")
+def models_optimization():
+    try:
+        result = _load_models_with_costs()
+    except ApiAuthError:
+        flash("API authentication failed. Please update your service token.", "error")
+        return redirect(url_for("setup"))
     if result is None:
         return redirect(url_for("setup"))
 
     project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
 
-    recs = generate_recommendations(models, has_costs, sao_status=sao_status)
+    # Fetch code-level details and test results for enrichment
+    client = get_client_from_config()
+    detail_models = fetch_model_details(client)
+    details_lookup = {m["unique_id"]: m for m in detail_models}
+    test_results = fetch_latest_test_results(client, days=7)
 
-    # Filter sao_status for display: only show model-building jobs, not maintenance/CI
-    from recommendation_engine import _is_model_building_job
-    display_sao_status = {
-        **sao_status,
-        "disabled_jobs": [j for j in sao_status["disabled_jobs"] if _is_model_building_job(j)],
-    }
-    display_sao_status["all_enabled"] = len(display_sao_status["disabled_jobs"]) == 0
+    # Compute top 20% expense threshold (per run)
+    if has_costs:
+        expense_vals = sorted([m["avg_cost"] for m in models if m.get("avg_cost")])
+    else:
+        expense_vals = sorted([m["avg_execution_time"] for m in models if m.get("avg_execution_time")])
+    p80 = expense_vals[int(len(expense_vals) * 0.8)] if expense_vals else 0
 
-    total_savings = sum(r["estimated_impact"]["weekly_savings"] or 0 for r in recs)
-    total_runs_saveable = sum(r["estimated_impact"]["runs_eliminated"] or 0 for r in recs)
-    high_priority_count = sum(1 for r in recs if r["priority"] == "high")
+    # Filter models for optimization candidates
+    candidates = []
+    for m in models:
+        if m["materialized"] != "table":
+            continue
+
+        details = details_lookup.get(m["unique_id"], {})
+
+        rows = m.get("latest_rows") or 0
+        avg_time = m.get("avg_execution_time") or 0
+        expense = m.get("avg_cost") or avg_time if has_costs else avg_time
+
+        size_time_qualifies = rows >= 1_000_000 and avg_time >= 60
+        top20_qualifies = expense >= p80
+
+        if not (size_time_qualifies or top20_qualifies):
+            continue
+
+        has_pk = details.get("has_potential_pk", bool(details.get("unique_key")))
+        has_date = details.get("has_date_column", False)
+        if not (has_pk or has_date):
+            continue
+
+        if details.get("has_window_function", False):
+            continue
+
+        # Merge aggregated + detail data
+        enriched = dict(m)
+        for k, v in details.items():
+            if k not in enriched:
+                enriched[k] = v
+
+        # PK detection columns
+        # pk_test: unique + not_null tests on same column, both PASSED on last run
+        pk_test_uids = details.get("pk_test_uids", {})
+        pk_test = False
+        pk_test_cols = []
+        for col, uids in pk_test_uids.items():
+            u_status = test_results.get(uids["unique"], "")
+            n_status = test_results.get(uids["not_null"], "")
+            if u_status == "pass" and n_status == "pass":
+                pk_test = True
+                pk_test_cols.append(col)
+        enriched["pk_test"] = pk_test
+        enriched["pk_test_cols"] = pk_test_cols
+
+        # pk_values: standalone "id" column detected
+        enriched["pk_values"] = bool(details.get("pk_value_cols"))
+        enriched["pk_value_col_names"] = details.get("pk_value_cols", [])
+
+        # likely_pass_pk: either or both are true
+        enriched["likely_pass_pk"] = pk_test or enriched["pk_values"]
+
+        qualifications = []
+        if size_time_qualifies:
+            qualifications.append(f"{rows:,} rows, {fmt_duration(avg_time)} avg")
+        if top20_qualifies:
+            qualifications.append("Top 20% expensive")
+        enriched["qualification"] = " | ".join(qualifications)
+
+        candidates.append(enriched)
+
+    candidates.sort(key=lambda m: m.get("avg_execution_time") or 0, reverse=True)
 
     return render_template(
-        "recommendations.html",
+        "models_optimization.html",
         project_name=project_name,
         env_name=account_name,
-        models=models,
+        models=candidates,
+        all_model_count=len(models),
         total_runs=total_runs,
         has_costs=has_costs,
-        recommendations=recs,
-        total_savings=total_savings,
-        total_runs_saveable=total_runs_saveable,
-        high_priority_count=high_priority_count,
-        sao_status=display_sao_status,
-        active_tab="recommendations",
+        active_tab="models_optimization",
+    )
+
+
+@app.route("/jobs-optimization")
+def jobs_optimization():
+    creds = load_credentials()
+    if creds is None:
+        return redirect(url_for("setup"))
+
+    client = get_client_from_config()
+    account_name = creds.get("name", "")
+    try:
+        project_name, jobs = build_job_analysis(client, days=7)
+    except Exception as e:
+        err = str(e)
+        if any(s in err for s in ("401", "403", "429", "Unauthorized", "Forbidden", "Too Many")):
+            msg = "Rate limited — please wait a moment and retry." if "429" in err or "Too Many" in err else "API authentication failed. Please update your service token."
+            flash(msg, "error")
+            return redirect(url_for("setup"))
+        raise
+
+    candidate_count = sum(1 for j in jobs if j["is_candidate"])
+    total_redundant = sum(j["shared_models"] for j in jobs if j["is_candidate"])
+
+    return render_template(
+        "jobs_optimization.html",
+        project_name=project_name,
+        env_name=account_name,
+        jobs=jobs,
+        candidate_count=candidate_count,
+        total_redundant=total_redundant,
+        active_tab="jobs_optimization",
     )
 
 
@@ -234,7 +364,13 @@ def warehouses():
 
     env_key = _env_key_from_config()
     client = get_client_from_config()
-    discovered = discover_warehouses(client)
+    try:
+        discovered = discover_warehouses(client)
+    except Exception as e:
+        if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e) or "Forbidden" in str(e):
+            flash("API authentication failed. Please update your service token.", "error")
+            return redirect(url_for("setup"))
+        raise
     wh_config = get_warehouse_config(env_key)
     account_name = creds.get("name", "")
 

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ project_name }} — SAO Observability</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
   <style>
     :root {
       --bg: #0f1117;
@@ -245,7 +246,9 @@
 <body>
   <nav class="tab-nav">
     <a href="/" class="tab active">Dashboard</a>
-    <a href="/recommendations" class="tab">Recommendations</a>
+    <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <a href="/models-optimization" class="tab">Models Optimization</a>
+    <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
     <span class="tab-spacer"></span>
     <a href="/warehouses" class="tab-link">Warehouse Costs</a>
     <a href="/setup" class="tab-link">Setup</a>
@@ -880,5 +883,28 @@
       URL.revokeObjectURL(url);
     }
   </script>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
+  <div class="loading-text" style="color:#e1e4ed;font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;">Loading...</div>
+  <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
+    <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
+  </div>
+</div>
+<style>
+@keyframes loadSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+</style>
+<script>
+document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(function(link) {
+  if (link.getAttribute('href') === window.location.pathname) return;
+  link.addEventListener('click', function() {
+    var overlay = document.getElementById('loadingOverlay'); var lt = overlay ? overlay.querySelector('.loading-text') : null; if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
+    if (overlay) overlay.style.display = 'flex';
+  });
+});
+</script>
 </body>
 </html>

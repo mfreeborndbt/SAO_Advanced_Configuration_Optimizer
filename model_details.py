@@ -58,6 +58,10 @@ def fetch_model_details(client: DbtClient, max_models=500):
                 packages
                 tags
                 fqn
+                catalog {
+                  columns { name }
+                }
+                children { uniqueId resourceType }
               }
             }
           }
@@ -90,8 +94,50 @@ def fetch_model_details(client: DbtClient, max_models=500):
         compiled_code = node.get("compiledCode") or ""
         complexity = compute_complexity(raw_code)
 
+        # Date column detection from catalog
+        catalog = node.get("catalog") or {}
+        col_data = catalog.get("columns") or []
+        column_names = [c.get("name", "").lower() for c in col_data]
+        date_indicators = ("date", "timestamp", "_at", "created", "updated", "modified")
+        has_date_column = any(
+            any(ind in cn for ind in date_indicators) for cn in column_names
+        )
+
+        # Window function detection (any analytic OVER clause)
+        lower_raw = raw_code.lower()
+        has_window_function = bool(re.search(r'\bover\s*\(', lower_raw))
+
+        # Primary key detection: unique_key config, contract, or unique+not_null tests
         materialized = config.get("materialized", mat)
         unique_key = config.get("unique_key")
+        contract_enforced = node.get("contractEnforced") or False
+
+        # Check for unique + not_null tests on the same column (= primary key)
+        children = node.get("children") or []
+        test_uids = [c["uniqueId"] for c in children if c.get("resourceType") == "test"]
+        model_name = node["name"]
+        unique_test_map = {}   # col -> test_uid
+        not_null_test_map = {}  # col -> test_uid
+        for uid in test_uids:
+            parts = uid.split(".")
+            if len(parts) >= 3:
+                test_part = parts[2]
+                if test_part.startswith(f"unique_{model_name}_"):
+                    col = test_part[len(f"unique_{model_name}_"):]
+                    unique_test_map[col] = uid
+                elif test_part.startswith(f"not_null_{model_name}_"):
+                    col = test_part[len(f"not_null_{model_name}_"):]
+                    not_null_test_map[col] = uid
+        pk_columns_from_tests = set(unique_test_map.keys()) & set(not_null_test_map.keys())
+        pk_test_uids = {
+            col: {"unique": unique_test_map[col], "not_null": not_null_test_map[col]}
+            for col in pk_columns_from_tests
+        }
+
+        # pk_values: column name contains standalone "id" (not "lid", "idle", etc.)
+        pk_value_cols = [cn for cn in column_names if re.search(r'(^|_)id(_|$)', cn)]
+
+        has_potential_pk = bool(unique_key) or contract_enforced or bool(pk_columns_from_tests) or bool(pk_value_cols)
         strategy = config.get("incremental_strategy")
         pre_hooks = config.get("pre_hook") or []
         post_hooks = config.get("post_hook") or []
@@ -128,6 +174,14 @@ def fetch_model_details(client: DbtClient, max_models=500):
             "has_grants": bool(grants),
             "table_format": table_format,
             "external_volume": external_volume,
+            "column_names": column_names,
+            "has_date_column": has_date_column,
+            "has_window_function": has_window_function,
+            "has_potential_pk": has_potential_pk,
+            "contract_enforced": contract_enforced,
+            "pk_test_uids": pk_test_uids,
+            "pk_columns_from_tests": sorted(pk_columns_from_tests),
+            "pk_value_cols": pk_value_cols,
             "raw_code": raw_code,
             "compiled_code_len": len(compiled_code),
             "raw_code_len": len(raw_code),

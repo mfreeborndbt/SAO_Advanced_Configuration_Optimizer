@@ -35,7 +35,7 @@ def _cache_set(key, data):
 
 def _get_scheduled_jobs(client: DbtClient):
     """Return dict of job_id -> job info for scheduled jobs."""
-    key = _cache_key("scheduled_jobs_v2", client.account_id, client.project_id)
+    key = _cache_key("scheduled_jobs_v3", client.account_id, client.project_id)
     cached = _cache_get(key)
     if cached is not None:
         return {int(k): v for k, v in cached.items()}
@@ -62,6 +62,7 @@ def _get_scheduled_jobs(client: DbtClient):
                     "cadence": _cron_to_human(cron),
                     "sao_enabled": "state_aware_orchestration" in cost_features,
                     "compare_changes_flags": job.get("compare_changes_flags", ""),
+                    "execute_steps": job.get("execute_steps") or [],
                 }
         offset += 100
 
@@ -178,6 +179,46 @@ def fetch_scheduled_runs(client: DbtClient, days=7):
         offset += 100
 
     return runs
+
+
+def fetch_latest_test_results(client: DbtClient, days=7):
+    """Fetch test pass/fail results from the most recent successful run.
+
+    Returns dict of test_unique_id -> status string (e.g. 'pass', 'fail').
+    """
+    runs = fetch_scheduled_runs(client, days=days)
+    latest = next((r for r in runs if r["status"] == 10), None)
+    if not latest:
+        return {}
+
+    job_id = latest["job_definition_id"]
+    run_id = latest["id"]
+
+    key = _cache_key("run_tests", client.environment_id, job_id, run_id)
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+
+    query = """
+    query ($jobId: BigInt!, $runId: BigInt) {
+      job(id: $jobId, runId: $runId) {
+        tests {
+          uniqueId
+          status
+        }
+      }
+    }
+    """
+    try:
+        data = client.query_discovery(query, variables={"jobId": job_id, "runId": run_id})
+        tests = data["job"]["tests"]
+        result = {t["uniqueId"]: t["status"] for t in tests}
+    except Exception as e:
+        print(f"  Warning: Could not fetch test results: {e}")
+        result = {}
+
+    _cache_set(key, result)
+    return result
 
 
 def fetch_run_models_with_stats(client: DbtClient, job_id, run_id):
@@ -421,7 +462,6 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             "sao_enabled": jinfo.get("sao_enabled", False),
             "total_runs": total,
         })
-    # Pad to 5 entries for consistent column count
     while len(top_project_jobs_info) < 5:
         top_project_jobs_info.append({"id": None, "name": "", "cadence": "", "sao_enabled": False, "total_runs": 0})
 
@@ -607,3 +647,176 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
     }
 
     return project_name, aggregated, len(runs), high_cost_ids, sao_status, top_project_jobs_info
+
+
+def _cron_to_runs_per_day(cron_expr):
+    """Rough estimate of runs per day from a cron expression."""
+    if not cron_expr:
+        return 0
+    parts = cron_expr.strip().split()
+    if len(parts) != 5:
+        return 0
+    minute, hour, dom, month, dow = parts
+
+    if hour == "*":
+        hours = 24
+    elif hour.startswith("*/"):
+        try:
+            hours = 24 / int(hour[2:])
+        except (ValueError, ZeroDivisionError):
+            hours = 1
+    elif "," in hour or "-" in hour:
+        h_set = set()
+        for p in hour.split(","):
+            if "-" in p:
+                try:
+                    lo, hi = p.split("-")
+                    h_set.update(range(int(lo), int(hi) + 1))
+                except ValueError:
+                    pass
+            else:
+                try:
+                    h_set.add(int(p))
+                except ValueError:
+                    pass
+        hours = len(h_set) or 1
+    else:
+        hours = 1
+
+    if dow == "*":
+        days_ratio = 1.0
+    else:
+        d_set = set()
+        for p in dow.split(","):
+            if "-" in p:
+                try:
+                    lo, hi = p.split("-")
+                    d_set.update(range(int(lo), int(hi) + 1))
+                except ValueError:
+                    pass
+            else:
+                try:
+                    d_set.add(int(p))
+                except ValueError:
+                    pass
+        days_ratio = len(d_set) / 7.0 if d_set else 1.0
+
+    return hours * days_ratio
+
+
+def build_job_analysis(client, days=7):
+    """Analyze job overlap and redundancy for the Jobs Optimization tab.
+
+    Returns (project_name, list of job analysis dicts).
+    """
+    runs = fetch_scheduled_runs(client, days=days)
+    scheduled_jobs = _get_scheduled_jobs(client)
+    project_name, _ = fetch_applied_model_details(client, max_models=1)
+
+    # Build job -> set of model UIDs from run data
+    job_models = defaultdict(set)
+    for run in runs:
+        job_id = run["job_definition_id"]
+        try:
+            models = fetch_run_models_with_stats(client, job_id, run["id"])
+        except Exception:
+            continue
+        for m in models:
+            mat = m.get("materializedType")
+            if mat in ("table", "incremental") and m.get("status") == "success":
+                job_models[job_id].add(m["uniqueId"])
+
+    all_job_ids = [jid for jid in job_models if jid in scheduled_jobs]
+    analysis = []
+
+    for jid in all_job_ids:
+        info = scheduled_jobs[jid]
+        my_models = job_models[jid]
+        if not my_models:
+            continue
+
+        # Overlap with each other job
+        overlaps = []
+        all_shared = set()
+        my_freq = _cron_to_runs_per_day(info["cron"])
+
+        for other_jid in all_job_ids:
+            if other_jid == jid:
+                continue
+            shared = my_models & job_models[other_jid]
+            if not shared:
+                continue
+            all_shared |= shared
+            other_info = scheduled_jobs[other_jid]
+            other_freq = _cron_to_runs_per_day(other_info["cron"])
+
+            if my_freq > 0 and other_freq > 0:
+                ratio = min(my_freq, other_freq) / max(my_freq, other_freq)
+                cadence_similar = ratio >= 0.5
+                this_less_frequent = my_freq < other_freq * 0.5
+            else:
+                cadence_similar = False
+                this_less_frequent = False
+
+            overlaps.append({
+                "job_id": other_jid,
+                "job_name": other_info["name"],
+                "shared_count": len(shared),
+                "shared_pct": round(len(shared) / len(my_models) * 100, 1),
+                "other_total": len(job_models[other_jid]),
+                "other_cadence": other_info["cadence"],
+                "cadence_similar": cadence_similar,
+                "this_less_frequent": this_less_frequent,
+            })
+
+        overlaps.sort(key=lambda x: x["shared_count"], reverse=True)
+        redundancy_pct = round(len(all_shared) / len(my_models) * 100, 1) if my_models else 0
+
+        # Unique logic detection from execute steps
+        execute_steps = info.get("execute_steps", [])
+        unique_flags = set()
+        for step in execute_steps:
+            sl = step.lower()
+            if "--full-refresh" in sl:
+                unique_flags.add("full-refresh")
+            if "source freshness" in sl or "source snapshot-freshness" in sl:
+                unique_flags.add("source freshness")
+            if "dbt seed" in sl:
+                unique_flags.add("seed")
+            if "dbt snapshot" in sl:
+                unique_flags.add("snapshot")
+            if "dbt run-operation" in sl:
+                unique_flags.add("run-operation")
+        unique_flags = sorted(unique_flags)
+        has_unique_logic = bool(unique_flags)
+
+        has_cadence_match = any(
+            ov.get("cadence_similar") or ov.get("this_less_frequent")
+            for ov in overlaps
+        )
+        is_candidate = (
+            redundancy_pct >= 50
+            and not has_unique_logic
+            and has_cadence_match
+        )
+
+        analysis.append({
+            "job_id": jid,
+            "name": info["name"],
+            "cron": info["cron"],
+            "cadence": info["cadence"],
+            "sao_enabled": info["sao_enabled"],
+            "execute_steps": execute_steps,
+            "runs_per_day": round(my_freq, 1),
+            "total_models": len(my_models),
+            "shared_models": len(all_shared),
+            "unique_models": len(my_models) - len(all_shared),
+            "redundancy_pct": redundancy_pct,
+            "overlaps": overlaps[:5],
+            "has_unique_logic": has_unique_logic,
+            "unique_flags": unique_flags,
+            "is_candidate": is_candidate,
+        })
+
+    analysis.sort(key=lambda j: j["redundancy_pct"], reverse=True)
+    return project_name, analysis

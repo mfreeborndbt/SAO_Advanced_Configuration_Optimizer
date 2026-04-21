@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — Models Optimization</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e1e4ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c63ff;
+      --green: #34d399;
+      --red: #f87171;
+      --orange: #fbbf24;
+      --blue: #60a5fa;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .summary {
+      display: flex;
+      gap: 1.25rem;
+      margin: 1.5rem 0 2rem;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1.25rem;
+      min-width: 120px;
+    }
+    .card .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; }
+    .card .detail { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="text"], input[type="number"], select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    input[type="text"] { width: 260px; }
+    input::placeholder { color: var(--text-muted); }
+    input[type="number"] { color-scheme: dark; }
+    .table-wrap { overflow-x: auto; position: relative; }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    th, td { border-bottom: 1px solid var(--border); }
+    th {
+      background: #14161e;
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      overflow: hidden;
+    }
+    th { position: relative; }
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: col-resize;
+      background: transparent;
+    }
+    .resize-handle:hover, .resize-handle.active { background: var(--accent); }
+    th:hover { color: var(--text); }
+    th.sorted-asc::after { content: " \25B2"; font-size: 0.55rem; }
+    th.sorted-desc::after { content: " \25BC"; font-size: 0.55rem; }
+    td {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tr:hover td { background: rgba(108, 99, 255, 0.05); }
+    /* Sticky first column (Model name) */
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--surface);
+      border-right: 2px solid var(--border);
+      max-width: none;
+    }
+    th:first-child { z-index: 3; background: #14161e; }
+    tr:hover td:first-child { background: #1e2130; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-table { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+    .badge-incremental { background: rgba(251, 191, 36, 0.15); color: var(--orange); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+    .muted { color: var(--text-muted); }
+    .model-name { font-weight: 500; }
+    .schema-label { color: var(--text-muted); font-size: 0.65rem; }
+    .yes-green { color: var(--green); font-weight: 600; }
+    .no-red { color: var(--red); }
+    .no-muted { color: var(--text-muted); }
+    .qualification-text { font-size: 0.7rem; color: var(--text-muted); max-width: 220px; white-space: normal; line-height: 1.3; }
+    .filepath-text { font-size: 0.7rem; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* Multi-select dropdown styles */
+    .multi-select {
+      position: relative;
+      display: inline-block;
+    }
+    .multi-select-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      min-width: 100px;
+    }
+    .multi-select-btn:hover {
+      border-color: var(--accent);
+    }
+    .multi-select-btn::after {
+      content: "\25BC";
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+    .multi-select-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-top: 4px;
+      min-width: 180px;
+      max-height: 280px;
+      overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .multi-select-dropdown.open {
+      display: block;
+    }
+    .multi-select-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+    .multi-select-item:hover {
+      background: rgba(108, 99, 255, 0.1);
+    }
+    .multi-select-item input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+    .multi-select-item label {
+      cursor: pointer;
+      flex: 1;
+    }
+    .multi-select-actions {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .multi-select-actions button {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 0.72rem;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+    }
+    .multi-select-actions button:hover { text-decoration: underline; }
+  </style>
+  <style>
+    .tab-nav { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: var(--text); text-decoration: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab-spacer { flex: 1; }
+    .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
+    .tab-link:hover { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <nav class="tab-nav">
+    <a href="/" class="tab">Dashboard</a>
+    <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <a href="/models-optimization" class="tab active">Models Optimization</a>
+    <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
+    <span class="tab-spacer"></span>
+    <a href="/warehouses" class="tab-link">Warehouse Costs</a>
+    <a href="/setup" class="tab-link">Setup</a>
+  </nav>
+
+  <header>
+    <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Models Optimization</span></h1>
+    <div class="subtitle">Table models that may benefit from incremental materialization — filtered from {{ all_model_count }} total models</div>
+  </header>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Candidates</div>
+      <div class="value">{{ models | length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Of Total Models</div>
+      <div class="value">{{ all_model_count }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Avg Build Time</div>
+      <div class="value" style="font-size:1.1rem;">
+        {% if models %}{{ (models | sum(attribute='avg_execution_time') / models | length) | duration }}{% else %}--{% endif %}
+      </div>
+    </div>
+    {% if has_costs %}
+    {% set total_weekly_cost = models | sum(attribute='total_cost') %}
+    <div class="card">
+      <div class="label">Total Weekly Cost</div>
+      <div class="value" style="font-size:1.1rem;">{{ total_weekly_cost | cost }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Filter by model name..." oninput="filterTable()">
+
+    <div class="multi-select" id="colToggleWrap">
+      <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
+      <div class="multi-select-dropdown">
+        <!-- populated by JS from table headers -->
+      </div>
+    </div>
+  </div>
+
+  {% if models %}
+  <div class="table-wrap">
+  <table id="optTable">
+    <thead>
+      <tr>
+        <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
+        <th data-col="1" onclick="sortTable(1, 'str')">Qualification</th>
+        <th data-col="2" onclick="sortTable(2, 'str')">Layer</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">Folder</th>
+        <th data-col="4" onclick="sortTable(4, 'num')">Rows</th>
+        <th data-col="5" onclick="sortTable(5, 'num')">Avg Time</th>
+        <th data-col="6" onclick="sortTable(6, 'num')">Avg Cost</th>
+        <th data-col="7" onclick="sortTable(7, 'str')">PK Test</th>
+        <th data-col="8" onclick="sortTable(8, 'str')">PK Values</th>
+        <th data-col="9" onclick="sortTable(9, 'str')">Likely PK</th>
+        <th data-col="10" onclick="sortTable(10, 'str')">Has Date</th>
+        <th data-col="11" onclick="sortTable(11, 'num')">Lines</th>
+        <th data-col="12" onclick="sortTable(12, 'num')">Joins</th>
+        <th data-col="13" onclick="sortTable(13, 'num')">CTEs</th>
+        <th data-col="14" onclick="sortTable(14, 'num')">Subqueries</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">CASE</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">GROUP BY</th>
+        <th data-col="17" onclick="sortTable(17, 'num')">UNIONs</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Refs</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">Sources</th>
+        <th data-col="20" onclick="sortTable(20, 'num')">Jinja</th>
+        <th data-col="21" onclick="sortTable(21, 'str')">Description</th>
+        <th data-col="22" onclick="sortTable(22, 'str')">File Path</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models %}
+      <tr data-name="{{ m.name | lower }}">
+        <td>
+          <div class="model-name">{{ m.name }}</div>
+          <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
+        </td>
+        <td><div class="qualification-text">{{ m.qualification or '--' }}</div></td>
+        <td>{{ m.layer or '' }}</td>
+        <td>{{ m.folder1 or '' }}</td>
+        <td class="num" data-val="{{ m.latest_rows or 0 }}">
+          {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.avg_execution_time or 0 }}">
+          {{ m.avg_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.avg_cost or 0 }}">
+          {% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td>{% if m.pk_test %}<span class="yes-green" title="{{ m.pk_test_cols | join(', ') }}">Yes ({{ m.pk_test_cols | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td>{% if m.pk_values %}<span class="yes-green" title="{{ m.pk_value_col_names | join(', ') }}">Yes ({{ m.pk_value_col_names | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td>{% if m.likely_pass_pk %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td>{% if m.has_date_column %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.lines or 0 }}">{% if m.lines %}{{ m.lines }}{% else %}<span class="muted">--</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.joins or 0 }}">{{ m.joins or '0' }}</td>
+        <td class="num" data-val="{{ m.ctes or 0 }}">{{ m.ctes or '0' }}</td>
+        <td class="num" data-val="{{ m.subqueries or 0 }}">{{ m.subqueries or '0' }}</td>
+        <td class="num" data-val="{{ m.case_stmts or 0 }}">{{ m.case_stmts or '0' }}</td>
+        <td class="num" data-val="{{ m.group_bys or 0 }}">{{ m.group_bys or '0' }}</td>
+        <td class="num" data-val="{{ m.unions or 0 }}">{{ m.unions or '0' }}</td>
+        <td class="num" data-val="{{ m.refs or 0 }}">{{ m.refs or '0' }}</td>
+        <td class="num" data-val="{{ m.sources or 0 }}">{{ m.sources or '0' }}</td>
+        <td class="num" data-val="{{ m.jinja_blocks or 0 }}">{{ m.jinja_blocks or '0' }}</td>
+        <td>{% if m.has_description %}<span class="yes-green">Yes</span>{% else %}<span class="no-red">No</span>{% endif %}</td>
+        <td><div class="filepath-text" title="{{ m.file_path }}">{{ m.file_path or '' }}</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    No models met all optimization criteria. This means either: no tables exceed the size/cost thresholds,
+    qualifying models lack primary keys/date columns, or they use window functions.
+  </div>
+  {% endif %}
+
+  <script>
+    /* --- Multi-select dropdown logic --- */
+    function toggleDropdown(wrapId) {
+      const wrap = document.getElementById(wrapId);
+      const dd = wrap.querySelector('.multi-select-dropdown');
+      const isOpen = dd.classList.contains('open');
+      document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
+      if (!isOpen) dd.classList.add('open');
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.multi-select')) {
+        document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
+      }
+    });
+
+    function getSelectedValues(wrapId) {
+      const wrap = document.getElementById(wrapId);
+      const checked = wrap.querySelectorAll('input[type="checkbox"]:checked');
+      return Array.from(checked).map(cb => cb.value);
+    }
+
+    function updateMultiSelect(wrapId, categoryName) {
+      const wrap = document.getElementById(wrapId);
+      const btn = wrap.querySelector('.multi-select-btn');
+      const allCbs = wrap.querySelectorAll('.multi-select-item input[type="checkbox"]');
+      const selected = getSelectedValues(wrapId);
+      if (selected.length === 0 || selected.length === allCbs.length) {
+        btn.textContent = 'All ' + categoryName;
+      } else if (selected.length === 1) {
+        btn.textContent = selected[0];
+      } else {
+        btn.textContent = selected.length + ' ' + categoryName;
+      }
+    }
+
+    function msSelectAll(wrapId) {
+      document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = true);
+    }
+    function msClearAll(wrapId) {
+      document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+    }
+
+    /* --- Column Visibility Toggle --- */
+    function initColumnToggle() {
+      const table = document.getElementById('optTable');
+      if (!table) return;
+      const ths = table.querySelectorAll('thead th');
+      const container = document.querySelector('#colToggleWrap .multi-select-dropdown');
+      const actions = document.createElement('div');
+      actions.className = 'multi-select-actions';
+      actions.innerHTML = '<button onclick="msSelectAll(\'colToggleWrap\'); toggleColumns()">Select all</button><button onclick="msClearAll(\'colToggleWrap\'); toggleColumns()">Clear all</button>';
+      container.appendChild(actions);
+      ths.forEach((th, i) => {
+        if (i === 0) return;
+        const name = th.textContent.trim();
+        const item = document.createElement('div');
+        item.className = 'multi-select-item';
+        item.innerHTML = '<input type="checkbox" checked data-col-idx="' + i + '" onchange="toggleColumns()"><label>' + name + '</label>';
+        container.appendChild(item);
+      });
+    }
+
+    function toggleColumns() {
+      const checkboxes = document.querySelectorAll('#colToggleWrap .multi-select-item input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        const idx = parseInt(cb.dataset.colIdx);
+        const display = cb.checked ? '' : 'none';
+        document.querySelectorAll('#optTable tr').forEach(row => {
+          if (row.cells[idx]) row.cells[idx].style.display = display;
+        });
+      });
+    }
+
+    /* --- Filter Table --- */
+    function filterTable() {
+      const search = document.getElementById('search').value.toLowerCase();
+      document.querySelectorAll('#optTable tbody tr').forEach(row => {
+        const name = row.dataset.name || '';
+        const show = !search || name.includes(search);
+        row.style.display = show ? '' : 'none';
+      });
+    }
+
+    /* --- Sort Table --- */
+    let currentSort = { col: -1, asc: true };
+    function sortTable(col, type) {
+      if (_resizing) return;
+      if (currentSort.col === col) currentSort.asc = !currentSort.asc;
+      else { currentSort.col = col; currentSort.asc = type === 'str'; }
+
+      document.querySelectorAll('#optTable th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
+      const th = document.querySelector('#optTable th[data-col="' + col + '"]');
+      if (th) th.classList.add(currentSort.asc ? 'sorted-asc' : 'sorted-desc');
+
+      const tbody = document.querySelector('#optTable tbody');
+      const rows = Array.from(tbody.rows);
+      rows.sort((a, b) => {
+        if (type === 'num') {
+          const av = parseFloat(a.cells[col].dataset.val || '0');
+          const bv = parseFloat(b.cells[col].dataset.val || '0');
+          return currentSort.asc ? av - bv : bv - av;
+        } else {
+          const av = a.cells[col].textContent.trim().toLowerCase();
+          const bv = b.cells[col].textContent.trim().toLowerCase();
+          return currentSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
+    /* --- Column Resizer --- */
+    let _resizing = false;
+    function initResize(table) {
+      const cols = table.querySelectorAll('thead th');
+      cols.forEach(th => {
+        th.style.position = 'relative';
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          _resizing = true;
+          handle.classList.add('active');
+          const startX = e.pageX;
+          const startW = th.offsetWidth;
+          function onMove(ev) {
+            th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px';
+            th.style.minWidth = th.style.width;
+          }
+          function onUp() {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            setTimeout(() => { _resizing = false; }, 50);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.appendChild(handle);
+      });
+    }
+    document.querySelectorAll('table').forEach(t => initResize(t));
+    initColumnToggle();
+  </script>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
+  <div class="loading-text" style="color:#e1e4ed;font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;">Loading...</div>
+  <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
+    <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
+  </div>
+</div>
+<style>
+@keyframes loadSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+</style>
+<script>
+document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(function(link) {
+  if (link.getAttribute('href') === window.location.pathname) return;
+  link.addEventListener('click', function() {
+    var overlay = document.getElementById('loadingOverlay'); var lt = overlay ? overlay.querySelector('.loading-text') : null; if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
+    if (overlay) overlay.style.display = 'flex';
+  });
+});
+</script>
+</body>
+</html>
