@@ -246,10 +246,17 @@
 
     <div class="form-card">
       <form action="/setup/save" method="POST">
-        <div class="form-group">
-          <label>Account Prefix</label>
-          <input type="text" name="account_prefix" value="{{ creds.account_prefix if creds else '' }}" placeholder="e.g. abc123">
-          <div class="hint">The subdomain of your dbt Cloud URL — just the prefix before <code>.us1.dbt.com</code>.</div>
+        <div class="form-row">
+          <div class="form-group" style="flex:3;">
+            <label>Account Prefix</label>
+            <input type="text" name="account_prefix" value="{{ creds.account_prefix if creds else '' }}" placeholder="e.g. abc123">
+            <div class="hint">The subdomain of your dbt Cloud URL — the prefix before <code>.&lt;region&gt;.dbt.com</code>.</div>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Region</label>
+            <input type="text" name="region" value="{{ creds.region if creds and creds.region else 'us1' }}" placeholder="us1">
+            <div class="hint">e.g. us1, emea, au1</div>
+          </div>
         </div>
 
         <div class="form-row">
