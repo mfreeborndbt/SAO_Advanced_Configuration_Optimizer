@@ -213,7 +213,7 @@
 </head>
 <body>
   <nav class="tab-nav">
-    <a href="/" class="tab">Dashboard</a>
+    <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
@@ -271,6 +271,8 @@
       <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
       <div class="multi-select-dropdown"></div>
     </div>
+
+    <button onclick="exportCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.85rem;color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Export CSV</button>
   </div>
 
   {% if models %}
@@ -281,22 +283,24 @@
         <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
         <th data-col="1" onclick="sortTable(1, 'str')">Type</th>
         <th data-col="2" onclick="sortTable(2, 'str')">Layer</th>
-        <th data-col="3" onclick="sortTable(3, 'str')">Folder</th>
-        <th data-col="4" onclick="sortTable(4, 'str')">Tags</th>
-        <th data-col="5" onclick="sortTable(5, 'str')">build_after</th>
-        <th data-col="6" onclick="sortTable(6, 'num')">Avg Cost</th>
-        <th data-col="7" onclick="sortTable(7, 'num')">Total Cost</th>
-        <th data-col="8" onclick="sortTable(8, 'num')">Downstream Cost</th>
-        <th data-col="9" onclick="sortTable(9, 'num')">Downstream Tbls</th>
-        <th data-col="10" onclick="sortTable(10, 'num')">Runs</th>
-        <th data-col="11" onclick="sortTable(11, 'num')">Max Daily</th>
-        <th data-col="12" onclick="sortTable(12, 'num')">Avg Time</th>
-        <th data-col="13" onclick="sortTable(13, 'num')">Avg New Rows</th>
-        <th data-col="14" onclick="sortTable(14, 'num')">Change %</th>
-        <th data-col="15" onclick="sortTable(15, 'num')">Potential Skip %</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">Rows</th>
-        <th data-col="17" onclick="sortTable(17, 'num')">Row Delta</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Runs w/ Change</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">Folder 1</th>
+        <th data-col="4" onclick="sortTable(4, 'str')">Folder 2</th>
+        <th data-col="5" onclick="sortTable(5, 'str')">Folder 3</th>
+        <th data-col="6" onclick="sortTable(6, 'str')">Tags</th>
+        <th data-col="7" onclick="sortTable(7, 'str')">build_after</th>
+        <th data-col="8" onclick="sortTable(8, 'num')">Avg Cost</th>
+        <th data-col="9" onclick="sortTable(9, 'num')">Total Cost</th>
+        <th data-col="10" onclick="sortTable(10, 'num')">Downstream Cost</th>
+        <th data-col="11" onclick="sortTable(11, 'num')">Downstream Tbls</th>
+        <th data-col="12" onclick="sortTable(12, 'num')">Runs</th>
+        <th data-col="13" onclick="sortTable(13, 'num')">Max Daily</th>
+        <th data-col="14" onclick="sortTable(14, 'num')">Avg Time</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">Avg New Rows</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">Change %</th>
+        <th data-col="17" onclick="sortTable(17, 'num')">Potential Skip %</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Rows</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">Row Delta</th>
+        <th data-col="20" onclick="sortTable(20, 'num')">Runs w/ Change</th>
       </tr>
     </thead>
     <tbody>
@@ -318,6 +322,8 @@
         </td>
         <td>{{ m.layer or '' }}</td>
         <td>{{ m.folder1 or '' }}</td>
+        <td>{{ m.folder2 or '' }}</td>
+        <td>{{ m.folder3 or '' }}</td>
         <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">{{ m.tags | join(', ') if m.tags else '' }}</td>
         <td>
           {% if m.has_freshness_config %}
@@ -516,6 +522,33 @@
     }
     document.querySelectorAll('table').forEach(t => initResize(t));
     initColumnToggle();
+
+    function exportCSV() {
+      const table = document.getElementById('mainTable');
+      if (!table) return;
+      const headers = [], colVisible = [];
+      table.querySelectorAll('thead th').forEach((th, i) => {
+        const visible = th.style.display !== 'none';
+        colVisible.push(visible);
+        if (visible) headers.push('"' + th.textContent.trim().replace(/"/g, '""') + '"');
+      });
+      const rows = [headers.join(',')];
+      table.querySelectorAll('tbody tr').forEach(row => {
+        if (row.style.display === 'none') return;
+        const cells = [];
+        Array.from(row.cells).forEach((td, i) => {
+          if (!colVisible[i]) return;
+          let val = td.dataset.val !== undefined ? td.dataset.val : td.textContent.trim().replace(/\s+/g, ' ');
+          cells.push('"' + String(val).replace(/"/g, '""') + '"');
+        });
+        rows.push(cells.join(','));
+      });
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sao_build_after.csv';
+      a.click();
+    }
   </script>
 
 <!-- Loading overlay -->
@@ -539,15 +572,17 @@ document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(functio
     this.style.opacity = '0.5';
     var overlay = document.getElementById('loadingOverlay');
     var lt = overlay ? overlay.querySelector('.loading-text') : null;
+    var sub = overlay ? overlay.querySelector('.loading-sub') : null;
     if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
-    if (overlay) window._loadTimer = setTimeout(function() {
-      overlay.style.display = 'flex';
-      var start = Date.now();
-      window._elapsedTimer = setInterval(function() {
-        var el = document.getElementById('loadElapsed');
-        if (el) el.textContent = Math.floor((Date.now() - start) / 1000) + 's';
-      }, 1000);
-    }, 3000);
+    if (sub) sub.style.display = 'none';
+    if (overlay) overlay.style.display = 'flex';
+    var start = Date.now();
+    window._elapsedTimer = setInterval(function() {
+      var elapsed = Math.floor((Date.now() - start) / 1000);
+      if (elapsed >= 3 && sub) sub.style.display = '';
+      var el = document.getElementById('loadElapsed');
+      if (el) el.textContent = elapsed + 's';
+    }, 1000);
   });
 });
 </script>
