@@ -209,14 +209,13 @@ def models_optimization():
         if not (has_pk or has_date):
             continue
 
-        if details.get("has_window_function", False):
-            continue
-
         # Merge aggregated + detail data
         enriched = dict(m)
         for k, v in details.items():
             if k not in enriched:
                 enriched[k] = v
+        enriched["has_window_function"] = details.get("has_window_function", False)
+        enriched["window_fns"] = details.get("window_fns", 0)
 
         # PK detection columns
         # pk_test: unique + not_null tests on same column, both PASSED on last run
@@ -349,9 +348,8 @@ def setup_clear():
         os.remove(CREDENTIALS_PATH)
     cache_dir = os.path.join(os.path.dirname(__file__), ".cache")
     if os.path.exists(cache_dir):
-        import subprocess
-        subprocess.run(["find", cache_dir, "-type", "f", "-delete"], check=False)
-        subprocess.run(["find", cache_dir, "-type", "d", "-empty", "-delete"], check=False)
+        import shutil
+        shutil.rmtree(cache_dir, ignore_errors=True)
     flash("Credentials cleared.", "success")
     return redirect(url_for("setup"))
 
@@ -383,6 +381,104 @@ def warehouses():
         current_base_cost=wh_config["base_cost"],
         default_base_cost=DEFAULT_BASE_COST,
         sizes=WAREHOUSE_SIZES,
+    )
+
+
+@app.route("/updated-at")
+def updated_at():
+    try:
+        result = _load_models_with_costs()
+    except ApiAuthError:
+        flash("API authentication failed. Please update your service token.", "error")
+        return redirect(url_for("setup"))
+    if result is None:
+        return redirect(url_for("setup"))
+
+    project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
+
+    # Build lookup for static detection: a model is "static" if it never changed rows
+    model_lookup = {m["unique_id"]: m for m in models}
+    for m in models:
+        m["is_static"] = (
+            m.get("runs_with_data", 0) > 1
+            and (m.get("change_pct") == 0 or m.get("change_pct") is None)
+            and (m.get("row_delta") or 0) == 0
+        )
+
+    # For each model, check how many upstream tables are static
+    for m in models:
+        upstream_uids = m.get("_upstream_uids", [])
+        static_upstream = [
+            uid for uid in upstream_uids
+            if uid in model_lookup and model_lookup[uid].get("is_static", False)
+        ]
+        m["static_upstream_count"] = len(static_upstream)
+        m["has_static_upstream"] = len(static_upstream) > 0
+
+    # Filter to incremental models (SAO updated_at applies to incremental)
+    # Include table models too since they could be converted
+    candidates = []
+    for m in models:
+        if m["materialized"] not in ("table", "incremental"):
+            continue
+        upstream_count = m.get("upstream_table_count", 0)
+        candidates.append(m)
+
+    candidates.sort(key=lambda m: m.get("downstream_avg_cost") or 0, reverse=True)
+
+    return render_template(
+        "updated_at.html",
+        project_name=project_name,
+        env_name=account_name,
+        models=candidates,
+        all_model_count=len(models),
+        total_runs=total_runs,
+        has_costs=has_costs,
+        active_tab="updated_at",
+    )
+
+
+@app.route("/build-after")
+def build_after():
+    try:
+        result = _load_models_with_costs()
+    except ApiAuthError:
+        flash("API authentication failed. Please update your service token.", "error")
+        return redirect(url_for("setup"))
+    if result is None:
+        return redirect(url_for("setup"))
+
+    project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
+
+    # Filter to table/incremental models with run data
+    candidates = []
+    for m in models:
+        if m["materialized"] not in ("table", "incremental"):
+            continue
+        if not m.get("total_runs"):
+            continue
+
+        # Compute "potential skip %" — % of runs that had NO row changes
+        # This approximates how often SAO could skip this model
+        change_pct = m.get("change_pct")
+        if change_pct is not None:
+            m["potential_skip_pct"] = round(100 - change_pct, 1)
+        else:
+            m["potential_skip_pct"] = None
+
+        candidates.append(m)
+
+    candidates.sort(key=lambda m: m.get("avg_cost") or m.get("avg_execution_time") or 0, reverse=True)
+
+    return render_template(
+        "build_after.html",
+        project_name=project_name,
+        env_name=account_name,
+        models=candidates,
+        all_model_count=len(models),
+        total_runs=total_runs,
+        has_costs=has_costs,
+        active_tab="build_after",
     )
 
 

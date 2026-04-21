@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project_name }} — Models Optimization</title>
+  <title>{{ project_name }} — Updated At</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
   <style>
     :root {
@@ -111,7 +111,6 @@
       text-overflow: ellipsis;
     }
     tr:hover td { background: rgba(108, 99, 255, 0.05); }
-    /* Sticky first column (Model name) */
     th:first-child, td:first-child {
       position: sticky;
       left: 0;
@@ -139,21 +138,9 @@
     .yes-green { color: var(--green); font-weight: 600; }
     .no-red { color: var(--red); }
     .no-muted { color: var(--text-muted); }
-    .qualification-text { font-size: 0.7rem; color: var(--text-muted); max-width: 220px; white-space: normal; line-height: 1.3; }
-    .filepath-text { font-size: 0.7rem; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
-    .empty-state {
-      text-align: center;
-      padding: 3rem 2rem;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      line-height: 1.6;
-    }
 
     /* Multi-select dropdown styles */
-    .multi-select {
-      position: relative;
-      display: inline-block;
-    }
+    .multi-select { position: relative; display: inline-block; }
     .multi-select-btn {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -168,15 +155,8 @@
       gap: 0.4rem;
       min-width: 100px;
     }
-    .multi-select-btn:hover {
-      border-color: var(--accent);
-    }
-    .multi-select-btn::after {
-      content: "\25BC";
-      font-size: 0.55rem;
-      color: var(--text-muted);
-      margin-left: auto;
-    }
+    .multi-select-btn:hover { border-color: var(--accent); }
+    .multi-select-btn::after { content: "\25BC"; font-size: 0.55rem; color: var(--text-muted); margin-left: auto; }
     .multi-select-dropdown {
       display: none;
       position: absolute;
@@ -192,9 +172,7 @@
       overflow-y: auto;
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     }
-    .multi-select-dropdown.open {
-      display: block;
-    }
+    .multi-select-dropdown.open { display: block; }
     .multi-select-item {
       display: flex;
       align-items: center;
@@ -204,19 +182,9 @@
       font-size: 0.82rem;
       color: var(--text);
     }
-    .multi-select-item:hover {
-      background: rgba(108, 99, 255, 0.1);
-    }
-    .multi-select-item input[type="checkbox"] {
-      accent-color: var(--accent);
-      width: 14px;
-      height: 14px;
-      cursor: pointer;
-    }
-    .multi-select-item label {
-      cursor: pointer;
-      flex: 1;
-    }
+    .multi-select-item:hover { background: rgba(108, 99, 255, 0.1); }
+    .multi-select-item input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+    .multi-select-item label { cursor: pointer; flex: 1; }
     .multi-select-actions {
       display: flex;
       gap: 0.5rem;
@@ -248,9 +216,9 @@
   <nav class="tab-nav">
     <a href="/" class="tab">Dashboard</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
-    <a href="/models-optimization" class="tab active">Models Optimization</a>
+    <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
-    <a href="/updated-at" class="tab">Updated At</a>
+    <a href="/updated-at" class="tab active">Updated At</a>
     <a href="/build-after" class="tab">Build After</a>
     <span class="tab-spacer"></span>
     <a href="/warehouses" class="tab-link">Warehouse Costs</a>
@@ -258,137 +226,145 @@
   </nav>
 
   <header>
-    <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Models Optimization</span></h1>
-    <div class="subtitle">Table models that may benefit from incremental materialization — filtered from {{ all_model_count }} total models</div>
+    <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Updated At</span></h1>
+    <div class="subtitle">Identify which upstream tables to use for SAO <code>updates_on</code> configuration — find expensive models connected to a manageable number of upstream tables, with no static dependencies</div>
   </header>
 
   <div class="summary">
     <div class="card">
-      <div class="label">Candidates</div>
+      <div class="label">Models Shown</div>
       <div class="value">{{ models | length }}</div>
     </div>
     <div class="card">
       <div class="label">Of Total Models</div>
       <div class="value">{{ all_model_count }}</div>
     </div>
+    {% set models_with_static = models | selectattr('has_static_upstream') | list %}
     <div class="card">
-      <div class="label">Avg Build Time</div>
-      <div class="value" style="font-size:1.1rem;">
-        {% if models %}{{ (models | sum(attribute='avg_execution_time') / models | length) | duration }}{% else %}--{% endif %}
-      </div>
+      <div class="label">With Static Upstream</div>
+      <div class="value" {% if models_with_static | length > 0 %}style="color: var(--orange);"{% endif %}>{{ models_with_static | length }}</div>
     </div>
-    {% if has_costs %}
-    {% set total_weekly_cost = models | sum(attribute='total_cost') %}
-    <div class="card">
-      <div class="label">Total Weekly Cost</div>
-      <div class="value" style="font-size:1.1rem;">{{ total_weekly_cost | cost }}</div>
-    </div>
-    {% endif %}
   </div>
 
   <div class="controls">
     <input type="text" id="search" placeholder="Filter by model name..." oninput="filterTable()">
-
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min upstream tbls:</label>
+    <input type="number" id="minUpstream" min="0" value="2" placeholder="--" style="width:60px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Max upstream tbls:</label>
+    <input type="number" id="maxUpstream" min="0" value="" placeholder="--" style="width:60px;" oninput="filterTable()">
+    {% if has_costs %}
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min avg cost $:</label>
+    <input type="number" id="minAvgCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    <label style="font-size:0.75rem;color:var(--text-muted);">Min downstream cost $:</label>
+    <input type="number" id="minDownCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
+    {% endif %}
     <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="hideWindowFns" checked onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
-      Hide window function models
+      <input type="checkbox" id="hideStaticUpstream" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Hide models with static upstream
     </label>
 
     <div class="multi-select" id="colToggleWrap">
       <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
-      <div class="multi-select-dropdown">
-        <!-- populated by JS from table headers -->
-      </div>
+      <div class="multi-select-dropdown"></div>
     </div>
   </div>
 
   {% if models %}
   <div class="table-wrap">
-  <table id="optTable">
+  <table id="mainTable">
     <thead>
       <tr>
         <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
-        <th data-col="1" onclick="sortTable(1, 'str')">Qualification</th>
+        <th data-col="1" onclick="sortTable(1, 'str')">Type</th>
         <th data-col="2" onclick="sortTable(2, 'str')">Layer</th>
         <th data-col="3" onclick="sortTable(3, 'str')">Folder</th>
-        <th data-col="4" onclick="sortTable(4, 'num')">Rows</th>
-        <th data-col="5" onclick="sortTable(5, 'num')">Avg Time</th>
-        <th data-col="6" onclick="sortTable(6, 'num')">Avg Cost</th>
-        <th data-col="7" onclick="sortTable(7, 'num')">Avg New Rows</th>
-        <th data-col="8" onclick="sortTable(8, 'str')">PK Test</th>
-        <th data-col="9" onclick="sortTable(9, 'str')">PK Values</th>
-        <th data-col="10" onclick="sortTable(10, 'str')">Likely PK</th>
-        <th data-col="11" onclick="sortTable(11, 'str')">Has Date</th>
-        <th data-col="12" onclick="sortTable(12, 'num')">Window Fns</th>
-        <th data-col="13" onclick="sortTable(13, 'num')">Lines</th>
-        <th data-col="14" onclick="sortTable(14, 'num')">Joins</th>
-        <th data-col="15" onclick="sortTable(15, 'num')">CTEs</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">Subqueries</th>
-        <th data-col="17" onclick="sortTable(17, 'num')">CASE</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">GROUP BY</th>
-        <th data-col="19" onclick="sortTable(19, 'num')">UNIONs</th>
-        <th data-col="20" onclick="sortTable(20, 'num')">Refs</th>
-        <th data-col="21" onclick="sortTable(21, 'num')">Sources</th>
-        <th data-col="22" onclick="sortTable(22, 'num')">Jinja</th>
-        <th data-col="23" onclick="sortTable(23, 'str')">Description</th>
-        <th data-col="24" onclick="sortTable(24, 'str')">File Path</th>
+        <th data-col="4" onclick="sortTable(4, 'str')">Tags</th>
+        <th data-col="5" onclick="sortTable(5, 'str')">updates_on</th>
+        <th data-col="6" onclick="sortTable(6, 'num')">Upstream Tbls</th>
+        <th data-col="7" onclick="sortTable(7, 'str')">Static Upstream</th>
+        <th data-col="8" onclick="sortTable(8, 'num')">Static Count</th>
+        <th data-col="9" onclick="sortTable(9, 'str')">Is Static</th>
+        <th data-col="10" onclick="sortTable(10, 'num')">Avg Time</th>
+        <th data-col="11" onclick="sortTable(11, 'num')">Avg Cost</th>
+        <th data-col="12" onclick="sortTable(12, 'num')">Downstream Tbls</th>
+        <th data-col="13" onclick="sortTable(13, 'num')">Downstream Cost</th>
+        <th data-col="14" onclick="sortTable(14, 'num')">Upstream Cost</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">Runs</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">Avg New Rows</th>
+        <th data-col="17" onclick="sortTable(17, 'num')">Change %</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Rows</th>
       </tr>
     </thead>
     <tbody>
       {% for m in models %}
-      <tr data-name="{{ m.name | lower }}" data-has-winfn="{{ '1' if m.has_window_function else '0' }}">
+      <tr data-name="{{ m.name | lower }}"
+          data-upstream="{{ m.upstream_table_count or 0 }}"
+          data-avgcost="{{ m.avg_cost or 0 }}"
+          data-downcost="{{ m.downstream_avg_cost or 0 }}"
+          data-staticup="{{ '1' if m.has_static_upstream else '0' }}">
         <td>
           <div class="model-name">{{ m.name }}</div>
           <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
         </td>
-        <td><div class="qualification-text">{{ m.qualification or '--' }}</div></td>
+        <td>
+          {% if m.materialized == 'table' %}<span class="badge badge-table">table</span>
+          {% elif m.materialized == 'incremental' %}<span class="badge badge-incremental">incremental</span>
+          {% else %}{{ m.materialized }}{% endif %}
+        </td>
         <td>{{ m.layer or '' }}</td>
         <td>{{ m.folder1 or '' }}</td>
-        <td class="num" data-val="{{ m.latest_rows or 0 }}">
-          {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">{{ m.tags | join(', ') if m.tags else '' }}</td>
+        <td>{{ m.updates_on or '--' }}</td>
+        <td class="num" data-val="{{ m.upstream_table_count or 0 }}">
+          {% if (m.upstream_table_count or 0) >= 2 and (m.upstream_table_count or 0) <= 5 %}
+            <span style="color: var(--green);">{{ m.upstream_table_count or 0 }}</span>
+          {% else %}
+            {{ m.upstream_table_count or 0 }}
+          {% endif %}
         </td>
-        <td class="num" data-val="{{ m.avg_execution_time or 0 }}">
-          {{ m.avg_execution_time | duration }}
+        <td>
+          {% if m.has_static_upstream %}<span style="color: var(--orange);">Yes</span>{% else %}<span class="muted">No</span>{% endif %}
         </td>
+        <td class="num" data-val="{{ m.static_upstream_count or 0 }}">
+          {% if m.static_upstream_count > 0 %}<span style="color: var(--orange);">{{ m.static_upstream_count }}</span>{% else %}0{% endif %}
+        </td>
+        <td>
+          {% if m.is_static %}<span style="color: var(--red);">Yes</span>{% else %}<span class="muted">No</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.avg_execution_time or 0 }}">{{ m.avg_execution_time | duration }}</td>
         <td class="num" data-val="{{ m.avg_cost or 0 }}">
           {% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
+        <td class="num" data-val="{{ m.downstream_table_count or 0 }}">{{ m.downstream_table_count or 0 }}</td>
+        <td class="num" data-val="{{ m.downstream_avg_cost or 0 }}">
+          {% if has_costs and m.downstream_avg_cost is not none %}{{ m.downstream_avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.upstream_avg_cost or 0 }}">
+          {% if has_costs and m.upstream_avg_cost is not none %}{{ m.upstream_avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.total_runs or 0 }}">{{ m.total_runs or 0 }}</td>
         <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
           {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
-        <td>{% if m.pk_test %}<span class="yes-green" title="{{ m.pk_test_cols | join(', ') }}">Yes ({{ m.pk_test_cols | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td>{% if m.pk_values %}<span class="yes-green" title="{{ m.pk_value_col_names | join(', ') }}">Yes ({{ m.pk_value_col_names | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td>{% if m.likely_pass_pk %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td>{% if m.has_date_column %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td class="num" data-val="{{ m.window_fns or 0 }}">
-          {% if m.has_window_function %}<span style="color: var(--orange);">{{ m.window_fns or 1 }}</span>{% else %}0{% endif %}
+        <td class="num" data-val="{{ m.change_pct or 0 }}">
+          {% if m.change_pct is not none %}{{ "%.0f"|format(m.change_pct) }}%{% else %}<span class="muted">--</span>{% endif %}
         </td>
-        <td class="num" data-val="{{ m.lines or 0 }}">{% if m.lines %}{{ m.lines }}{% else %}<span class="muted">--</span>{% endif %}</td>
-        <td class="num" data-val="{{ m.joins or 0 }}">{{ m.joins or '0' }}</td>
-        <td class="num" data-val="{{ m.ctes or 0 }}">{{ m.ctes or '0' }}</td>
-        <td class="num" data-val="{{ m.subqueries or 0 }}">{{ m.subqueries or '0' }}</td>
-        <td class="num" data-val="{{ m.case_stmts or 0 }}">{{ m.case_stmts or '0' }}</td>
-        <td class="num" data-val="{{ m.group_bys or 0 }}">{{ m.group_bys or '0' }}</td>
-        <td class="num" data-val="{{ m.unions or 0 }}">{{ m.unions or '0' }}</td>
-        <td class="num" data-val="{{ m.refs or 0 }}">{{ m.refs or '0' }}</td>
-        <td class="num" data-val="{{ m.sources or 0 }}">{{ m.sources or '0' }}</td>
-        <td class="num" data-val="{{ m.jinja_blocks or 0 }}">{{ m.jinja_blocks or '0' }}</td>
-        <td>{% if m.has_description %}<span class="yes-green">Yes</span>{% else %}<span class="no-red">No</span>{% endif %}</td>
-        <td><div class="filepath-text" title="{{ m.file_path }}">{{ m.file_path or '' }}</div></td>
+        <td class="num" data-val="{{ m.latest_rows or 0 }}">
+          {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
   {% else %}
-  <div class="empty-state">
-    No models met all optimization criteria. This means either: no tables exceed the size/cost thresholds,
-    or qualifying models lack primary keys/date columns.
+  <div style="text-align:center;padding:3rem 2rem;color:var(--text-muted);font-size:0.9rem;">
+    No table or incremental models found.
   </div>
   {% endif %}
 
   <script>
-    /* --- Multi-select dropdown logic --- */
+    /* --- Multi-select / Column toggle --- */
     function toggleDropdown(wrapId) {
       const wrap = document.getElementById(wrapId);
       const dd = wrap.querySelector('.multi-select-dropdown');
@@ -396,43 +372,19 @@
       document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
       if (!isOpen) dd.classList.add('open');
     }
-
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.multi-select')) {
         document.querySelectorAll('.multi-select-dropdown').forEach(d => d.classList.remove('open'));
       }
     });
-
-    function getSelectedValues(wrapId) {
-      const wrap = document.getElementById(wrapId);
-      const checked = wrap.querySelectorAll('input[type="checkbox"]:checked');
-      return Array.from(checked).map(cb => cb.value);
-    }
-
-    function updateMultiSelect(wrapId, categoryName) {
-      const wrap = document.getElementById(wrapId);
-      const btn = wrap.querySelector('.multi-select-btn');
-      const allCbs = wrap.querySelectorAll('.multi-select-item input[type="checkbox"]');
-      const selected = getSelectedValues(wrapId);
-      if (selected.length === 0 || selected.length === allCbs.length) {
-        btn.textContent = 'All ' + categoryName;
-      } else if (selected.length === 1) {
-        btn.textContent = selected[0];
-      } else {
-        btn.textContent = selected.length + ' ' + categoryName;
-      }
-    }
-
     function msSelectAll(wrapId) {
       document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = true);
     }
     function msClearAll(wrapId) {
       document.getElementById(wrapId).querySelectorAll('.multi-select-item input[type="checkbox"]').forEach(cb => cb.checked = false);
     }
-
-    /* --- Column Visibility Toggle --- */
     function initColumnToggle() {
-      const table = document.getElementById('optTable');
+      const table = document.getElementById('mainTable');
       if (!table) return;
       const ths = table.querySelectorAll('thead th');
       const container = document.querySelector('#colToggleWrap .multi-select-dropdown');
@@ -449,43 +401,56 @@
         container.appendChild(item);
       });
     }
-
     function toggleColumns() {
       const checkboxes = document.querySelectorAll('#colToggleWrap .multi-select-item input[type="checkbox"]');
       checkboxes.forEach(cb => {
         const idx = parseInt(cb.dataset.colIdx);
         const display = cb.checked ? '' : 'none';
-        document.querySelectorAll('#optTable tr').forEach(row => {
+        document.querySelectorAll('#mainTable tr').forEach(row => {
           if (row.cells[idx]) row.cells[idx].style.display = display;
         });
       });
     }
 
-    /* --- Filter Table --- */
+    /* --- Filter --- */
     function filterTable() {
       const search = document.getElementById('search').value.toLowerCase();
-      const hideWinFn = document.getElementById('hideWindowFns').checked;
-      document.querySelectorAll('#optTable tbody tr').forEach(row => {
+      const minUp = parseFloat(document.getElementById('minUpstream').value) || 0;
+      const maxUpEl = document.getElementById('maxUpstream');
+      const maxUp = maxUpEl.value ? parseFloat(maxUpEl.value) : Infinity;
+      const hideStatic = document.getElementById('hideStaticUpstream').checked;
+      const minAvgCostEl = document.getElementById('minAvgCost');
+      const minAvgCost = minAvgCostEl ? (parseFloat(minAvgCostEl.value) || 0) : 0;
+      const minDownCostEl = document.getElementById('minDownCost');
+      const minDownCost = minDownCostEl ? (parseFloat(minDownCostEl.value) || 0) : 0;
+
+      document.querySelectorAll('#mainTable tbody tr').forEach(row => {
         const name = row.dataset.name || '';
-        const hasWinFn = row.dataset.hasWinfn === '1';
-        let show = !search || name.includes(search);
-        if (show && hideWinFn && hasWinFn) show = false;
+        const upstream = parseFloat(row.dataset.upstream) || 0;
+        const avgCost = parseFloat(row.dataset.avgcost) || 0;
+        const downCost = parseFloat(row.dataset.downcost) || 0;
+        const hasStaticUp = row.dataset.staticup === '1';
+
+        let show = true;
+        if (search && !name.includes(search)) show = false;
+        if (upstream < minUp || upstream > maxUp) show = false;
+        if (avgCost < minAvgCost) show = false;
+        if (downCost < minDownCost) show = false;
+        if (hideStatic && hasStaticUp) show = false;
         row.style.display = show ? '' : 'none';
       });
     }
 
-    /* --- Sort Table --- */
+    /* --- Sort --- */
     let currentSort = { col: -1, asc: true };
     function sortTable(col, type) {
       if (_resizing) return;
       if (currentSort.col === col) currentSort.asc = !currentSort.asc;
       else { currentSort.col = col; currentSort.asc = type === 'str'; }
-
-      document.querySelectorAll('#optTable th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
-      const th = document.querySelector('#optTable th[data-col="' + col + '"]');
+      document.querySelectorAll('#mainTable th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
+      const th = document.querySelector('#mainTable th[data-col="' + col + '"]');
       if (th) th.classList.add(currentSort.asc ? 'sorted-asc' : 'sorted-desc');
-
-      const tbody = document.querySelector('#optTable tbody');
+      const tbody = document.querySelector('#mainTable tbody');
       const rows = Array.from(tbody.rows);
       rows.sort((a, b) => {
         if (type === 'num') {
@@ -501,7 +466,7 @@
       rows.forEach(r => tbody.appendChild(r));
     }
 
-    /* --- Column Resizer --- */
+    /* --- Resize --- */
     let _resizing = false;
     function initResize(table) {
       const cols = table.querySelectorAll('thead th');
@@ -510,22 +475,13 @@
         const handle = document.createElement('div');
         handle.className = 'resize-handle';
         handle.addEventListener('mousedown', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
+          e.preventDefault(); e.stopPropagation();
           _resizing = true;
           handle.classList.add('active');
           const startX = e.pageX;
           const startW = th.offsetWidth;
-          function onMove(ev) {
-            th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px';
-            th.style.minWidth = th.style.width;
-          }
-          function onUp() {
-            handle.classList.remove('active');
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-            setTimeout(() => { _resizing = false; }, 50);
-          }
+          function onMove(ev) { th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px'; th.style.minWidth = th.style.width; }
+          function onUp() { handle.classList.remove('active'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); setTimeout(() => { _resizing = false; }, 50); }
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
@@ -534,6 +490,7 @@
     }
     document.querySelectorAll('table').forEach(t => initResize(t));
     initColumnToggle();
+    filterTable();
   </script>
 
 <!-- Loading overlay -->
