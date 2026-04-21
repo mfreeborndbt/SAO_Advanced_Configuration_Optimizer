@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Setup — dbt Observability</title>
+  <title>Settings — API Setup</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
   <style>
     :root {
@@ -23,23 +23,64 @@
       background: var(--bg);
       color: var(--text);
       padding: 2rem;
-      max-width: 700px;
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
-    h1 span { color: var(--accent); }
-    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 2rem; }
-    .nav-links {
-      font-size: 0.85rem;
-      margin-bottom: 1.5rem;
-      display: flex;
-      gap: 1.5rem;
+
+    /* Tab nav — matches main pages */
+    .tab-nav { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: var(--text); text-decoration: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab-spacer { flex: 1; }
+    .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
+    .tab-link:hover { color: var(--accent); text-decoration: none; }
+    .tab-link.active { color: var(--accent); font-weight: 600; }
+
+    /* Page layout */
+    .page-content {
+      max-width: 640px;
+      margin: 0 auto;
     }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+    /* Settings sub-tabs */
+    .settings-tabs {
+      display: flex;
+      gap: 0;
+      margin: 1.5rem 0 2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .settings-tab {
+      flex: 1;
+      padding: 0.7rem 1.25rem;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      transition: background 0.15s, color 0.15s;
+    }
+    .settings-tab:last-child { border-right: none; }
+    .settings-tab:hover { color: var(--text); background: #1e2130; text-decoration: none; }
+    .settings-tab.active {
+      color: var(--text);
+      background: var(--bg);
+      font-weight: 600;
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
+
+    /* Flash messages */
     .flash {
       padding: 0.75rem 1rem;
       border-radius: 6px;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
       font-size: 0.85rem;
       border: 1px solid;
     }
@@ -53,12 +94,20 @@
       border-color: rgba(248, 113, 113, 0.3);
       color: var(--red);
     }
+
+    /* Form */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2rem;
+    }
     .form-group {
       margin-bottom: 1.25rem;
     }
     .form-group label {
       display: block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -67,7 +116,7 @@
     }
     .form-group input {
       width: 100%;
-      background: var(--surface);
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 0.6rem 0.85rem;
@@ -85,7 +134,8 @@
     .form-group .hint {
       font-size: 0.72rem;
       color: var(--text-muted);
-      margin-top: 0.25rem;
+      margin-top: 0.3rem;
+      line-height: 1.4;
     }
     .form-row {
       display: flex;
@@ -104,10 +154,10 @@
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
+      transition: opacity 0.15s;
     }
     .btn:hover { opacity: 0.9; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn.saving { position: relative; }
     .btn.saving::after {
       content: '';
       display: inline-block;
@@ -134,7 +184,7 @@
       display: flex;
       align-items: center;
       gap: 1rem;
-      margin-top: 1.5rem;
+      margin-top: 1.75rem;
     }
     .status-badge {
       display: inline-block;
@@ -155,72 +205,86 @@
   </style>
 </head>
 <body>
-  <div class="nav-links">
+  <nav class="tab-nav">
     {% if creds %}
-    <a href="/">Dashboard</a>
-    <a href="/data-dictionary">Data Dictionary</a>
-    <a href="/models-optimization">Models Optimization</a>
-    <a href="/jobs-optimization">Jobs Optimization</a>
-    <a href="/updated-at">Updated At</a>
-    <a href="/build-after">Build After</a>
-    <a href="/warehouses">Warehouse Costs</a>
+    <a href="/" class="tab">Dashboard</a>
+    <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <a href="/models-optimization" class="tab">Models Optimization</a>
+    <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
+    <a href="/updated-at" class="tab">Updated At</a>
+    <a href="/build-after" class="tab">Build After</a>
     {% endif %}
-  </div>
+    <span class="tab-spacer"></span>
+    <a href="/setup" class="tab-link active">&#9881; Settings</a>
+  </nav>
 
-  <h1><span>&#9642;</span> API Setup</h1>
-  <div class="subtitle">
-    Configure your dbt Cloud credentials
-    {% if creds %}
-      &nbsp;&mdash;&nbsp; <span class="status-badge status-configured">Configured</span>
-    {% else %}
-      &nbsp;&mdash;&nbsp; <span class="status-badge status-not-configured">Not configured</span>
-    {% endif %}
-  </div>
-
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-    <div class="flash flash-{{ category }}">{{ message }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <form action="/setup/save" method="POST">
-    <div class="form-group">
-      <label>Account Prefix</label>
-      <input type="text" name="account_prefix" value="{{ creds.account_prefix if creds else '' }}" placeholder="e.g. abc123">
-      <div class="hint">The subdomain of your dbt Cloud URL — just the prefix before <code>.us1.dbt.com</code>.</div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label>Account ID</label>
-        <input type="text" name="account_id" value="{{ creds.account_id if creds else '' }}" placeholder="">
-        <div class="hint">Found in dbt Cloud URL: /deploy/{account_id}/...</div>
+  <div class="page-content">
+    <header>
+      <h1><span>&#9642;</span> Settings</h1>
+      <div class="subtitle">
+        Configure your dbt Cloud connection and cost settings
+        {% if creds %}
+          &nbsp;&mdash;&nbsp; <span class="status-badge status-configured">Connected</span>
+        {% else %}
+          &nbsp;&mdash;&nbsp; <span class="status-badge status-not-configured">Not configured</span>
+        {% endif %}
       </div>
-      <div class="form-group">
-        <label>Project ID</label>
-        <input type="text" name="project_id" value="{{ creds.project_id if creds else '' }}" placeholder="">
-        <div class="hint">Found in dbt Cloud URL: /projects/{project_id}/...</div>
-      </div>
-      <div class="form-group">
-        <label>Environment ID (Production)</label>
-        <input type="text" name="environment_id" value="{{ creds.environment_id if creds else '' }}" placeholder="">
-        <div class="hint">Your production deployment environment ID</div>
-      </div>
-    </div>
+    </header>
 
-    <div class="form-group">
-      <label>Service Token</label>
-      <input type="password" name="token" value="" placeholder="{{ '••••••••••••••••' if creds else '' }}">
-      <div class="hint">{% if creds %}Leave blank to keep the current token. Enter a new value to update it.{% else %}A service token with read + metadata access. Create in dbt Cloud > Account Settings > Service Tokens.{% endif %}</div>
-    </div>
-
-    <div class="actions">
-      <button type="submit" class="btn">Save & Test Connection</button>
+    <div class="settings-tabs">
+      <a href="/setup" class="settings-tab active">API Credentials</a>
       {% if creds %}
-      <a href="/setup/clear" class="btn btn-danger" onclick="return confirm('Clear all credentials and cached data?')">Clear Credentials</a>
+      <a href="/warehouses" class="settings-tab">Warehouse Costs</a>
       {% endif %}
     </div>
-  </form>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="form-card">
+      <form action="/setup/save" method="POST">
+        <div class="form-group">
+          <label>Account Prefix</label>
+          <input type="text" name="account_prefix" value="{{ creds.account_prefix if creds else '' }}" placeholder="e.g. abc123">
+          <div class="hint">The subdomain of your dbt Cloud URL — just the prefix before <code>.us1.dbt.com</code>.</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Account ID</label>
+            <input type="text" name="account_id" value="{{ creds.account_id if creds else '' }}" placeholder="">
+            <div class="hint">URL: /deploy/{account_id}/...</div>
+          </div>
+          <div class="form-group">
+            <label>Project ID</label>
+            <input type="text" name="project_id" value="{{ creds.project_id if creds else '' }}" placeholder="">
+            <div class="hint">URL: /projects/{project_id}/...</div>
+          </div>
+          <div class="form-group">
+            <label>Environment ID (Prod)</label>
+            <input type="text" name="environment_id" value="{{ creds.environment_id if creds else '' }}" placeholder="">
+            <div class="hint">Production deployment environment</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Service Token</label>
+          <input type="password" name="token" value="" placeholder="{{ '••••••••••••••••' if creds else '' }}">
+          <div class="hint">{% if creds %}Leave blank to keep current token. Enter a new value to update.{% else %}A service token with read + metadata access.{% endif %}</div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn">Save & Test Connection</button>
+          {% if creds %}
+          <a href="/setup/clear" class="btn btn-danger" onclick="return confirm('Clear all credentials and cached data?')">Clear Credentials</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
 
 <!-- Loading overlay -->
 <div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
@@ -237,7 +301,8 @@
 </style>
 <script>
 /* Nav link click feedback */
-document.querySelectorAll('.nav-links a').forEach(function(link) {
+document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link, .settings-tab').forEach(function(link) {
+  if (link.getAttribute('href') === window.location.pathname) return;
   link.addEventListener('click', function() {
     this.style.opacity = '0.5';
     var overlay = document.getElementById('loadingOverlay');
@@ -252,25 +317,19 @@ document.querySelectorAll('form').forEach(function(form) {
   form.addEventListener('submit', function() {
     var btn = form.querySelector('button[type="submit"]');
     if (!btn) return;
-    var origText = btn.textContent;
     btn.disabled = true;
     btn.classList.add('saving');
-    if (btn.textContent.indexOf('Save') !== -1) {
-      btn.textContent = btn.textContent.replace('Save & Test Connection', 'Testing Connection...').replace('Save', 'Saving...');
-    }
-    /* Show loading overlay after 3 seconds if still waiting */
+    btn.textContent = 'Testing Connection...';
     var overlay = document.getElementById('loadingOverlay');
     var lt = overlay ? overlay.querySelector('.loading-text') : null;
-    if (lt) lt.textContent = origText.indexOf('Test') !== -1 ? 'Testing connection...' : 'Saving...';
+    if (lt) lt.textContent = 'Testing connection...';
     if (overlay) window._loadTimer = setTimeout(function() { overlay.style.display = 'flex'; }, 3000);
   });
 });
 
 /* Clear credentials link feedback */
 document.querySelectorAll('.btn-danger').forEach(function(link) {
-  var origClick = link.onclick;
   link.addEventListener('click', function(e) {
-    /* The confirm dialog happens via onclick, so we add feedback after confirmation */
     setTimeout(function() {
       if (!e.defaultPrevented) {
         link.style.opacity = '0.5';

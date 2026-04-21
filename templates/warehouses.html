@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Warehouse Config — {{ env_name }}</title>
+  <title>Settings — Warehouse Costs</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
   <style>
     :root {
@@ -14,6 +14,7 @@
       --text-muted: #8b8fa3;
       --accent: #6c63ff;
       --green: #34d399;
+      --red: #f87171;
       --orange: #fbbf24;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -22,29 +23,72 @@
       background: var(--bg);
       color: var(--text);
       padding: 2rem;
-      max-width: 900px;
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
-    h1 span { color: var(--accent); }
-    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 2rem; }
-    .nav-links {
-      font-size: 0.85rem;
-      margin-bottom: 1.5rem;
-      display: flex;
-      gap: 1.5rem;
+
+    /* Tab nav — matches main pages */
+    .tab-nav { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: var(--text); text-decoration: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab-spacer { flex: 1; }
+    .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
+    .tab-link:hover { color: var(--accent); text-decoration: none; }
+    .tab-link.active { color: var(--accent); font-weight: 600; }
+
+    /* Page layout */
+    .page-content {
+      max-width: 820px;
+      margin: 0 auto;
     }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+    /* Settings sub-tabs */
+    .settings-tabs {
+      display: flex;
+      gap: 0;
+      margin: 1.5rem 0 2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .settings-tab {
+      flex: 1;
+      padding: 0.7rem 1.25rem;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      transition: background 0.15s, color 0.15s;
+    }
+    .settings-tab:last-child { border-right: none; }
+    .settings-tab:hover { color: var(--text); background: #1e2130; text-decoration: none; }
+    .settings-tab.active {
+      color: var(--text);
+      background: var(--bg);
+      font-weight: 600;
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
+
+    /* Info box */
     .info-box {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem 1.5rem;
-      margin-bottom: 2rem;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
       font-size: 0.85rem;
       line-height: 1.6;
     }
     .info-box strong { color: var(--accent); }
+
+    /* Cost preview table */
     .cost-table {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -66,14 +110,21 @@
       background: transparent;
       border: none;
     }
+
+    /* Main form table */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
     table.main-table {
       width: 100%;
       border-collapse: collapse;
-      background: var(--surface);
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      margin-bottom: 1.5rem;
+      background: transparent;
+      border: none;
     }
     .main-table th {
       background: #14161e;
@@ -100,6 +151,7 @@
       color: var(--text);
       font-size: 0.85rem;
       min-width: 200px;
+      font-family: inherit;
     }
     select:focus { border-color: var(--accent); outline: none; }
     .btn {
@@ -107,14 +159,15 @@
       color: white;
       border: none;
       border-radius: 6px;
-      padding: 0.6rem 1.5rem;
+      padding: 0.65rem 1.5rem;
       font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.15s;
     }
     .btn:hover { opacity: 0.9; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn.saving { position: relative; }
     .btn.saving::after {
       content: '';
       display: inline-block;
@@ -130,93 +183,105 @@
   </style>
 </head>
 <body>
-  <div class="nav-links">
-    <a href="/">Dashboard</a>
-    <a href="/data-dictionary">Data Dictionary</a>
-    <a href="/models-optimization">Models Optimization</a>
-    <a href="/jobs-optimization">Jobs Optimization</a>
-    <a href="/updated-at">Updated At</a>
-    <a href="/build-after">Build After</a>
-    <a href="/setup">Setup</a>
-  </div>
+  <nav class="tab-nav">
+    <a href="/" class="tab">Dashboard</a>
+    <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <a href="/models-optimization" class="tab">Models Optimization</a>
+    <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
+    <a href="/updated-at" class="tab">Updated At</a>
+    <a href="/build-after" class="tab">Build After</a>
+    <span class="tab-spacer"></span>
+    <a href="/setup" class="tab-link active">&#9881; Settings</a>
+  </nav>
 
-  <h1><span>&#9642;</span> Warehouse Size Mapping</h1>
-  <div class="subtitle">{{ env_name }} — Map each warehouse to its size tier for cost estimation</div>
+  <div class="page-content">
+    <header>
+      <h1><span>&#9642;</span> Settings</h1>
+      <div class="subtitle">{{ env_name }} — Map warehouse sizes to cost tiers for spend estimation</div>
+    </header>
 
-  <div class="info-box">
-    <strong>Cost model:</strong> Set the base cost per second for the smallest tier below. Each size tier doubles the rate.
-    <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.75rem;">
-      <label style="font-weight: 600; white-space: nowrap;">Base cost per second: $</label>
-      <input type="number" name="base_cost" form="wh-form" step="0.00001" min="0"
-             value="{{ current_base_cost }}"
-             style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;color:var(--text);font-size:0.85rem;width:120px;">
-      <span style="color:var(--text-muted);font-size:0.75rem;">(default: ${{ "%.5f"|format(default_base_cost) }})</span>
+    <div class="settings-tabs">
+      <a href="/setup" class="settings-tab">API Credentials</a>
+      <a href="/warehouses" class="settings-tab active">Warehouse Costs</a>
     </div>
-    <table class="cost-table" id="costPreview">
-    </table>
-    <script>
-      function updatePreview() {
-        const base = parseFloat(document.querySelector('input[name="base_cost"]').value) || 0;
-        const sizes = [
-          {id: 'XS',  sf: 'XS',  db: '2XS', mult: 1},
-          {id: 'S',   sf: 'S',   db: 'XS',  mult: 2},
-          {id: 'M',   sf: 'M',   db: 'S',   mult: 4},
-          {id: 'L',   sf: 'L',   db: 'M',   mult: 8},
-          {id: 'XL',  sf: 'XL',  db: 'L',   mult: 16},
-          {id: '2XL', sf: '2XL', db: 'XL',  mult: 32},
-          {id: '3XL', sf: '3XL', db: '2XL', mult: 64},
-          {id: '4XL', sf: '4XL', db: '3XL', mult: 128}
-        ];
-        const tbody = document.getElementById('costPreview');
-        let html = '<tr><th>Snowflake</th><th>Databricks</th><th>Multiplier</th><th>$/sec</th><th>$/min</th><th>$/hr</th></tr>';
-        html += sizes.map(s => {
-          const perSec = base * s.mult;
-          const perMin = perSec * 60;
-          const perHr = perSec * 3600;
-          return `<tr><td>${s.sf}</td><td>${s.db}</td><td>${s.mult}x</td><td>$${perSec.toFixed(5)}</td><td>$${perMin.toFixed(3)}</td><td>$${perHr.toFixed(2)}</td></tr>`;
-        }).join('');
-        tbody.innerHTML = html;
-      }
-      document.querySelector('input[name="base_cost"]').addEventListener('input', updatePreview);
-      updatePreview();
-    </script>
+
+    <div class="info-box">
+      <strong>Cost model:</strong> Set the base cost per second for the smallest tier below. Each size tier doubles the rate.
+      <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.75rem;">
+        <label style="font-weight: 600; white-space: nowrap;">Base cost per second: $</label>
+        <input type="number" name="base_cost" form="wh-form" step="0.00001" min="0"
+               value="{{ current_base_cost }}"
+               style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;color:var(--text);font-size:0.85rem;width:120px;font-family:inherit;color-scheme:dark;">
+        <span style="color:var(--text-muted);font-size:0.75rem;">(default: ${{ "%.5f"|format(default_base_cost) }})</span>
+      </div>
+      <table class="cost-table" id="costPreview">
+      </table>
+      <script>
+        function updatePreview() {
+          const base = parseFloat(document.querySelector('input[name="base_cost"]').value) || 0;
+          const sizes = [
+            {id: 'XS',  sf: 'XS',  db: '2XS', mult: 1},
+            {id: 'S',   sf: 'S',   db: 'XS',  mult: 2},
+            {id: 'M',   sf: 'M',   db: 'S',   mult: 4},
+            {id: 'L',   sf: 'L',   db: 'M',   mult: 8},
+            {id: 'XL',  sf: 'XL',  db: 'L',   mult: 16},
+            {id: '2XL', sf: '2XL', db: 'XL',  mult: 32},
+            {id: '3XL', sf: '3XL', db: '2XL', mult: 64},
+            {id: '4XL', sf: '4XL', db: '3XL', mult: 128}
+          ];
+          const tbody = document.getElementById('costPreview');
+          let html = '<tr><th>Snowflake</th><th>Databricks</th><th>Multiplier</th><th>$/sec</th><th>$/min</th><th>$/hr</th></tr>';
+          html += sizes.map(s => {
+            const perSec = base * s.mult;
+            const perMin = perSec * 60;
+            const perHr = perSec * 3600;
+            return `<tr><td>${s.sf}</td><td>${s.db}</td><td>${s.mult}x</td><td>$${perSec.toFixed(5)}</td><td>$${perMin.toFixed(3)}</td><td>$${perHr.toFixed(2)}</td></tr>`;
+          }).join('');
+          tbody.innerHTML = html;
+        }
+        document.querySelector('input[name="base_cost"]').addEventListener('input', updatePreview);
+        updatePreview();
+      </script>
+    </div>
+
+    <form id="wh-form" action="/warehouses/save" method="POST">
+      <input type="hidden" name="env_key" value="{{ env_key }}">
+
+      <div class="form-card">
+        <table class="main-table">
+          <thead>
+            <tr>
+              <th>Warehouse</th>
+              <th>Role</th>
+              <th>Models Using</th>
+              <th>Mapped Size</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for wh_name, info in warehouses.items() | sort %}
+            <tr>
+              <td class="wh-name">{{ wh_name }}</td>
+              <td>
+                {% if info.is_default %}<span class="wh-default">CONNECTION DEFAULT</span>
+                {% else %}<span class="wh-override">MODEL OVERRIDE</span>{% endif %}
+              </td>
+              <td>{{ info.count }}</td>
+              <td>
+                <select name="size_{{ wh_name }}">
+                  {% for size in sizes %}
+                  <option value="{{ size.id }}" {% if current_mapping.get(wh_name) == size.id %}selected{% endif %}>{{ size.snowflake }} (Snowflake) / {{ size.databricks }} (Databricks) — {{ size.multiplier }}x</option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <button type="submit" class="btn">Save & Apply Costs</button>
+    </form>
   </div>
-
-  <form id="wh-form" action="/warehouses/save" method="POST">
-    <input type="hidden" name="env_key" value="{{ env_key }}">
-
-    <table class="main-table">
-      <thead>
-        <tr>
-          <th>Warehouse</th>
-          <th>Role</th>
-          <th>Models Using</th>
-          <th>Mapped Size</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for wh_name, info in warehouses.items() | sort %}
-        <tr>
-          <td class="wh-name">{{ wh_name }}</td>
-          <td>
-            {% if info.is_default %}<span class="wh-default">CONNECTION DEFAULT</span>
-            {% else %}<span class="wh-override">MODEL OVERRIDE</span>{% endif %}
-          </td>
-          <td>{{ info.count }}</td>
-          <td>
-            <select name="size_{{ wh_name }}">
-              {% for size in sizes %}
-              <option value="{{ size.id }}" {% if current_mapping.get(wh_name) == size.id %}selected{% endif %}>{{ size.snowflake }} (Snowflake) / {{ size.databricks }} (Databricks) — {{ size.multiplier }}x</option>
-              {% endfor %}
-            </select>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <button type="submit" class="btn">Save & Apply Costs</button>
-  </form>
 
 <!-- Loading overlay -->
 <div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
@@ -233,7 +298,8 @@
 </style>
 <script>
 /* Nav link click feedback */
-document.querySelectorAll('.nav-links a').forEach(function(link) {
+document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link, .settings-tab').forEach(function(link) {
+  if (link.getAttribute('href') === window.location.pathname) return;
   link.addEventListener('click', function() {
     this.style.opacity = '0.5';
     var overlay = document.getElementById('loadingOverlay');
