@@ -304,11 +304,13 @@ def setup_save():
     prefix = request.form.get("account_prefix", "").strip().lower()
     # Strip any accidentally pasted full URL down to just the prefix
     prefix = prefix.replace("https://", "").replace("http://", "").split(".")[0]
+    region = request.form.get("region", "us1").strip().lower()
 
     data = {
         "account_prefix": prefix,
-        "host_url": f"{prefix}.us1.dbt.com" if prefix else "",
-        "discovery_url": f"https://{prefix}.metadata.us1.dbt.com/graphql" if prefix else "",
+        "region": region,
+        "host_url": f"{prefix}.{region}.dbt.com" if prefix else "",
+        "discovery_url": f"https://{prefix}.metadata.{region}.dbt.com/graphql" if prefix else "",
         "account_id": request.form.get("account_id", "").strip(),
         "project_id": request.form.get("project_id", "").strip(),
         "environment_id": request.form.get("environment_id", "").strip(),
