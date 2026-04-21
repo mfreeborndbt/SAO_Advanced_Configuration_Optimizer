@@ -494,7 +494,8 @@
 
 <!-- Loading overlay -->
 <div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
-  <div class="loading-text" style="color:#e1e4ed;font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;">Loading...</div>
+  <div class="loading-text" style="color:#e1e4ed;font-size:1.1rem;font-weight:600;margin-bottom:0.5rem;">Loading...</div>
+  <div class="loading-sub" style="color:#8b8fa3;font-size:0.8rem;margin-bottom:1.5rem;">Fetching data from dbt Cloud — <span id="loadElapsed">0s</span></div>
   <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
     <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
   </div>
@@ -513,7 +514,14 @@ document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(functio
     var overlay = document.getElementById('loadingOverlay');
     var lt = overlay ? overlay.querySelector('.loading-text') : null;
     if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
-    if (overlay) window._loadTimer = setTimeout(function() { overlay.style.display = 'flex'; }, 3000);
+    if (overlay) window._loadTimer = setTimeout(function() {
+      overlay.style.display = 'flex';
+      var start = Date.now();
+      window._elapsedTimer = setInterval(function() {
+        var el = document.getElementById('loadElapsed');
+        if (el) el.textContent = Math.floor((Date.now() - start) / 1000) + 's';
+      }, 1000);
+    }, 3000);
   });
 });
 </script>
