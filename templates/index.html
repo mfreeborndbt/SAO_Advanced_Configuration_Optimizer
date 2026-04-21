@@ -249,6 +249,8 @@
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
+    <a href="/updated-at" class="tab">Updated At</a>
+    <a href="/build-after" class="tab">Build After</a>
     <span class="tab-spacer"></span>
     <a href="/warehouses" class="tab-link">Warehouse Costs</a>
     <a href="/setup" class="tab-link">Setup</a>
@@ -901,8 +903,11 @@
 document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(function(link) {
   if (link.getAttribute('href') === window.location.pathname) return;
   link.addEventListener('click', function() {
-    var overlay = document.getElementById('loadingOverlay'); var lt = overlay ? overlay.querySelector('.loading-text') : null; if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
-    if (overlay) overlay.style.display = 'flex';
+    this.style.opacity = '0.5';
+    var overlay = document.getElementById('loadingOverlay');
+    var lt = overlay ? overlay.querySelector('.loading-text') : null;
+    if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
+    if (overlay) window._loadTimer = setTimeout(function() { overlay.style.display = 'flex'; }, 3000);
   });
 });
 </script>
