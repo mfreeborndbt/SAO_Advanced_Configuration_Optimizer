@@ -2,12 +2,47 @@ import json
 import os
 import hashlib
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from collections import defaultdict
+from collections import defaultdict, Counter
 from discovery_client import DbtClient
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
 CACHE_TTL = 600  # 10 minutes
+
+# ---------------------------------------------------------------------------
+# In-memory aggregate cache — avoids re-fetching ALL data on every tab load.
+# Key: (account_id, project_id, environment_id)
+# Value: (timestamp, result_dict)
+# ---------------------------------------------------------------------------
+_AGGREGATE_CACHE = {}
+_AGGREGATE_CACHE_LOCK = threading.Lock()
+_AGGREGATE_CACHE_TTL = 600  # 10 minutes
+
+
+def _agg_cache_key(client):
+    return (str(client.account_id), str(client.project_id), str(client.environment_id))
+
+
+def _agg_cache_get(client):
+    key = _agg_cache_key(client)
+    with _AGGREGATE_CACHE_LOCK:
+        entry = _AGGREGATE_CACHE.get(key)
+        if entry and (time.time() - entry[0]) < _AGGREGATE_CACHE_TTL:
+            return entry[1]
+    return None
+
+
+def _agg_cache_set(client, data):
+    key = _agg_cache_key(client)
+    with _AGGREGATE_CACHE_LOCK:
+        _AGGREGATE_CACHE[key] = (time.time(), data)
+
+
+# ---------------------------------------------------------------------------
+# Disk cache for individual API responses
+# ---------------------------------------------------------------------------
 
 
 def _cache_key(prefix, *args):
@@ -31,6 +66,11 @@ def _cache_set(key, data):
     path = os.path.join(CACHE_DIR, f"{key}.json")
     with open(path, "w") as f:
         json.dump(data, f)
+
+
+# ---------------------------------------------------------------------------
+# Job metadata
+# ---------------------------------------------------------------------------
 
 
 def _get_scheduled_jobs(client: DbtClient):
@@ -73,7 +113,7 @@ def _get_scheduled_jobs(client: DbtClient):
 def _cron_to_human(cron_expr):
     """Convert a cron expression to a human-readable cadence string."""
     if not cron_expr:
-        return "—"
+        return "\u2014"
 
     parts = cron_expr.strip().split()
     if len(parts) != 5:
@@ -81,7 +121,6 @@ def _cron_to_human(cron_expr):
 
     minute, hour, dom, month, dow = parts
 
-    # Day names
     day_names = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
 
     def _parse_dow(dow_str):
@@ -108,12 +147,10 @@ def _cron_to_human(cron_expr):
 
     days = _parse_dow(dow)
 
-    # Frequency
     if hour.startswith("*/"):
         interval = int(hour[2:])
         return f"Every {interval}h, {days}"
     elif "," in hour or "-" in hour:
-        # Count distinct hours
         hours = set()
         for part in hour.split(","):
             if "-" in part:
@@ -127,7 +164,6 @@ def _cron_to_human(cron_expr):
     elif hour == "*":
         return f"Hourly, {days}"
     else:
-        # Specific hour
         h = int(hour)
         m = int(minute) if minute != "0" else 0
         time_str = f"{h:02d}:{m:02d}"
@@ -136,16 +172,16 @@ def _cron_to_human(cron_expr):
         return f"{time_str}, {days}"
 
 
-def fetch_scheduled_runs(client: DbtClient, days=7):
-    """Get all runs from scheduled jobs in the target environment.
+# ---------------------------------------------------------------------------
+# Data fetching
+# ---------------------------------------------------------------------------
 
-    Includes both successful and errored runs, since errored runs
-    often contain many models that built successfully.
-    """
+
+def fetch_scheduled_runs(client: DbtClient, days=7):
+    """Get all runs from scheduled jobs in the target environment."""
     scheduled_jobs = _get_scheduled_jobs(client)
     print(f"[{client.name}] Found {len(scheduled_jobs)} scheduled jobs")
 
-    # Use start of day N days ago to avoid cutting off early-morning runs
     now = datetime.now(timezone.utc)
     cutoff_date = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0)
     cutoff = cutoff_date.isoformat()[:19]
@@ -166,13 +202,10 @@ def fetch_scheduled_runs(client: DbtClient, days=7):
         for r in batch:
             if r["created_at"][:19] < cutoff:
                 return runs
-            # Must be in the target environment
             if str(r.get("environment_id")) != str(client.environment_id):
                 continue
-            # Must be from a scheduled job
             if r["job_definition_id"] not in scheduled_jobs.keys():
                 continue
-            # Must be finished (success or error, not running/queued/cancelled)
             if r["status"] not in (10, 20):
                 continue
             runs.append(r)
@@ -182,10 +215,7 @@ def fetch_scheduled_runs(client: DbtClient, days=7):
 
 
 def fetch_latest_test_results(client: DbtClient, days=7):
-    """Fetch test pass/fail results from the most recent successful run.
-
-    Returns dict of test_unique_id -> status string (e.g. 'pass', 'fail').
-    """
+    """Fetch test pass/fail results from the most recent successful run."""
     runs = fetch_scheduled_runs(client, days=days)
     latest = next((r for r in runs if r["status"] == 10), None)
     if not latest:
@@ -221,12 +251,12 @@ def fetch_latest_test_results(client: DbtClient, days=7):
     return result
 
 
-def fetch_run_models_with_stats(client: DbtClient, job_id, run_id):
-    """Get per-model execution data + stats for a specific run. Cached per run."""
+def _fetch_single_run_models(client, job_id, run_id):
+    """Fetch models for a single run. Returns (run_id, models) or (run_id, None) on error."""
     key = _cache_key("run_models", client.environment_id, job_id, run_id)
     cached = _cache_get(key)
     if cached is not None:
-        return cached
+        return run_id, cached
 
     query = """
     query ($jobId: BigInt!, $runId: BigInt) {
@@ -245,10 +275,60 @@ def fetch_run_models_with_stats(client: DbtClient, job_id, run_id):
       }
     }
     """
-    data = client.query_discovery(query, variables={"jobId": job_id, "runId": run_id})
-    result = data["job"]["models"]
-    _cache_set(key, result)
-    return result
+    try:
+        data = client.query_discovery(query, variables={"jobId": job_id, "runId": run_id})
+        result = data["job"]["models"]
+        _cache_set(key, result)
+        return run_id, result
+    except Exception as e:
+        print(f"  Skipping run {run_id}: {e}")
+        return run_id, None
+
+
+def _fetch_all_run_models_parallel(client, runs, max_workers=8):
+    """Fetch models for all runs in parallel. Returns dict of run_id -> models list."""
+    results = {}
+    # Separate cached vs uncached runs
+    uncached_runs = []
+    for run in runs:
+        run_id = run["id"]
+        job_id = run["job_definition_id"]
+        key = _cache_key("run_models", client.environment_id, job_id, run_id)
+        cached = _cache_get(key)
+        if cached is not None:
+            results[run_id] = cached
+        else:
+            uncached_runs.append(run)
+
+    if uncached_runs:
+        cached_count = len(results)
+        total = len(runs)
+        print(f"[{client.name}] {cached_count}/{total} runs cached, fetching {len(uncached_runs)} from API ({max_workers} parallel)...")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    _fetch_single_run_models, client, run["job_definition_id"], run["id"]
+                ): run["id"]
+                for run in uncached_runs
+            }
+            done_count = 0
+            for future in as_completed(futures):
+                run_id, models = future.result()
+                done_count += 1
+                if models is not None:
+                    results[run_id] = models
+                if done_count % 20 == 0 or done_count == len(uncached_runs):
+                    print(f"  Fetched {done_count}/{len(uncached_runs)} runs...")
+    else:
+        print(f"[{client.name}] All {len(runs)} runs served from cache")
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Applied state
+# ---------------------------------------------------------------------------
 
 
 def fetch_warehouse_config(client: DbtClient, environment_id):
@@ -342,14 +422,11 @@ def fetch_applied_model_details(client: DbtClient, max_models=500):
             if mat_lookup.get(p["uniqueId"]) in ("table", "incremental")
         ]
 
-        # Parse folder levels from filePath
         file_path = node.get("filePath") or ""
         path_parts = file_path.split("/")
-        # Strip leading models/ or dbt_packages/.../models/
         if "models" in path_parts:
             idx = len(path_parts) - 1 - path_parts[::-1].index("models")
             path_parts = path_parts[idx + 1:]
-        # Remove the filename
         if path_parts and "." in path_parts[-1]:
             path_parts = path_parts[:-1]
         folder1 = path_parts[0] if len(path_parts) > 0 else ""
@@ -371,7 +448,6 @@ def fetch_applied_model_details(client: DbtClient, max_models=500):
             "snowflake_warehouse": config.get("snowflake_warehouse"),
         }
 
-        # Extract freshness / build_after / updates_on config
         freshness = config.get("freshness") or {}
         build_after = freshness.get("build_after") or {}
         details[node["uniqueId"]]["build_after_count"] = build_after.get("count")
@@ -382,8 +458,25 @@ def fetch_applied_model_details(client: DbtClient, max_models=500):
     return project_name, details
 
 
+# ---------------------------------------------------------------------------
+# Main aggregate builder
+# ---------------------------------------------------------------------------
+
+
 def build_aggregate(client: DbtClient, days=7, max_models=500):
-    """Build aggregated model stats across all runs in the time window."""
+    """Build aggregated model stats across all runs in the time window.
+
+    Returns (project_name, models, total_runs, high_cost_ids, sao_status, top_project_jobs).
+    Also caches the result (and job analysis data) in memory for other tabs.
+    """
+    # Check in-memory cache first
+    cached = _agg_cache_get(client)
+    if cached is not None:
+        print(f"[{client.name}] Serving aggregate data from in-memory cache")
+        c = cached
+        return c["project_name"], c["aggregated"], c["total_runs"], c["high_cost_ids"], c["sao_status"], c["top_project_jobs"]
+
+    t0 = time.time()
     runs = fetch_scheduled_runs(client, days=days)
     print(f"[{client.name}] Found {len(runs)} scheduled runs in the past {days} days")
 
@@ -391,6 +484,10 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
     default_warehouse = fetch_warehouse_config(client, client.environment_id)
     scheduled_jobs = _get_scheduled_jobs(client)
 
+    # --- Parallel fetch all run model data ---
+    all_run_models = _fetch_all_run_models_parallel(client, runs, max_workers=8)
+
+    # --- Build model history and job_models in a single pass ---
     model_history = defaultdict(lambda: {
         "name": "",
         "schema": "",
@@ -402,14 +499,14 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         "row_counts_by_run": [],
     })
 
-    for i, run in enumerate(runs):
+    # Also build job -> model set for job analysis (avoids refetching later)
+    job_models = defaultdict(set)
+
+    for run in runs:
         run_id = run["id"]
         job_id = run["job_definition_id"]
-
-        try:
-            models = fetch_run_models_with_stats(client, job_id, run_id)
-        except Exception as e:
-            print(f"  Skipping run {run_id}: {e}")
+        models = all_run_models.get(run_id)
+        if models is None:
             continue
 
         for m in models:
@@ -419,10 +516,12 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             if mat not in ("table", "incremental"):
                 continue
 
-            # Only track models that actually ran (not reused/skipped)
             model_status = m["status"]
             if model_status != "success":
                 continue
+
+            # Track for job analysis
+            job_models[job_id].add(uid)
 
             entry = model_history[uid]
             entry["name"] = m["name"]
@@ -446,7 +545,7 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
 
     print(f"[{client.name}] Processed {len(runs)} runs, found {len(model_history)} table/incremental models with successful builds")
 
-    # Compute project-level top 5 jobs by total runs (irrespective of model)
+    # Compute project-level top 5 jobs by total runs
     total_runs_per_job = defaultdict(int)
     for run in runs:
         total_runs_per_job[run["job_definition_id"]] += 1
@@ -458,18 +557,18 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         top_project_jobs_info.append({
             "id": jid,
             "name": jinfo.get("name", f"Job {jid}"),
-            "cadence": jinfo.get("cadence", "—"),
+            "cadence": jinfo.get("cadence", "\u2014"),
             "sao_enabled": jinfo.get("sao_enabled", False),
             "total_runs": total,
         })
     while len(top_project_jobs_info) < 5:
         top_project_jobs_info.append({"id": None, "name": "", "cadence": "", "sao_enabled": False, "total_runs": 0})
 
-    # Compute aggregates — only for models that still exist in applied state
+    # Compute aggregates
     aggregated = []
     for uid, info in model_history.items():
         if uid not in applied_details:
-            continue  # model was removed from the project
+            continue
         exec_times = [r["execution_time"] for r in info["runs"] if r["execution_time"] is not None]
         applied = applied_details[uid]
         col_count = applied.get("column_count", 0)
@@ -488,9 +587,7 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         total_runs_count = len(info["runs"])
         avg_new_rows = (row_delta / total_runs_count) if (row_delta is not None and total_runs_count > 0) else None
 
-        # Max scheduled daily runs: group runs by date, find the peak day
-        from collections import Counter as _Counter
-        daily_counts = _Counter()
+        daily_counts = Counter()
         for r in info["runs"]:
             day = r["run_at"][:10]
             daily_counts[day] += 1
@@ -506,8 +603,8 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
 
         def _job_cadence(jid):
             if jid is None:
-                return "—"
-            return scheduled_jobs.get(jid, {}).get("cadence", "—")
+                return "\u2014"
+            return scheduled_jobs.get(jid, {}).get("cadence", "\u2014")
 
         def _job_name(jid):
             if jid is None:
@@ -519,7 +616,6 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
                 return None
             return scheduled_jobs.get(jid, {}).get("sao_enabled", False)
 
-        # Per-model runs in each of the top project-level jobs
         proj_job_runs = []
         for pj_id, _ in top_project_jobs:
             proj_job_runs.append(info["runs_per_job"].get(pj_id, 0))
@@ -547,6 +643,8 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             "build_after_period": applied.get("build_after_period"),
             "updates_on": applied.get("updates_on"),
             "has_freshness_config": applied.get("has_freshness_config", False),
+            "has_description": bool(applied.get("description")),
+            "file_path": applied.get("file_path", ""),
             "total_runs": len(info["runs"]),
             "max_daily_runs": max_daily_runs,
             "num_jobs": len(info["job_ids"]),
@@ -579,21 +677,17 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         })
 
     # --- Downstream dependency graph traversal ---
-    # Build adjacency list: model_uid -> [direct downstream table/incremental uids]
     adjacency = {}
     for uid, detail in applied_details.items():
         adjacency[uid] = detail.get("downstream_tables", [])
 
-    # Build upstream adjacency list: model_uid -> [direct upstream table/incremental uids]
     upstream_adjacency = {}
     for uid, detail in applied_details.items():
         upstream_adjacency[uid] = detail.get("upstream_tables", [])
 
-    # Build lookup of uid -> aggregated model data for cost/time
     agg_lookup = {m["unique_id"]: m for m in aggregated}
 
     def _bfs_downstream(start_uid):
-        """BFS to find all transitive downstream table/incremental models."""
         visited = set()
         queue = list(adjacency.get(start_uid, []))
         while queue:
@@ -606,22 +700,21 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
 
     for m in aggregated:
         downstream_uids = _bfs_downstream(m["unique_id"])
-        # Filter to only models that exist in our aggregated set (current, with runs)
         downstream_models = [agg_lookup[uid] for uid in downstream_uids if uid in agg_lookup]
 
         m["downstream_table_count"] = len(downstream_models)
         m["_downstream_uids"] = [d["unique_id"] for d in downstream_models]
-        m["downstream_avg_cost"] = None  # computed after cost mapping in app.py
+        m["downstream_avg_cost"] = None
 
-        # Upstream: direct parent table/incremental models only (no BFS)
         uid = m["unique_id"]
         upstream_uids = upstream_adjacency.get(uid, [])
         upstream_in_agg = [u for u in upstream_uids if u in agg_lookup]
         m["upstream_table_count"] = len(upstream_in_agg)
         m["_upstream_uids"] = upstream_in_agg
-        m["upstream_avg_cost"] = None  # computed after cost mapping in app.py
+        m["upstream_avg_cost"] = None
 
-    print(f"[{client.name}] Computed downstream dependency costs for {len(aggregated)} models")
+    elapsed = time.time() - t0
+    print(f"[{client.name}] Computed aggregate data for {len(aggregated)} models in {elapsed:.1f}s")
 
     aggregated.sort(key=lambda m: m["avg_execution_time"] or 0, reverse=True)
 
@@ -646,7 +739,24 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         "disabled_jobs": disabled_jobs,
     }
 
+    # Cache everything — including job_models for the jobs optimization tab
+    _agg_cache_set(client, {
+        "project_name": project_name,
+        "aggregated": aggregated,
+        "total_runs": len(runs),
+        "high_cost_ids": high_cost_ids,
+        "sao_status": sao_status,
+        "top_project_jobs": top_project_jobs_info,
+        "job_models": {jid: list(uids) for jid, uids in job_models.items()},
+        "scheduled_jobs": scheduled_jobs,
+    })
+
     return project_name, aggregated, len(runs), high_cost_ids, sao_status, top_project_jobs_info
+
+
+# ---------------------------------------------------------------------------
+# Job analysis — derived from cached aggregate data (zero additional API calls)
+# ---------------------------------------------------------------------------
 
 
 def _cron_to_runs_per_day(cron_expr):
@@ -704,38 +814,17 @@ def _cron_to_runs_per_day(cron_expr):
     return hours * days_ratio
 
 
-def build_job_analysis(client, days=7):
-    """Analyze job overlap and redundancy for the Jobs Optimization tab.
-
-    Returns (project_name, list of job analysis dicts).
-    """
-    runs = fetch_scheduled_runs(client, days=days)
-    scheduled_jobs = _get_scheduled_jobs(client)
-    project_name, _ = fetch_applied_model_details(client, max_models=1)
-
-    # Build job -> set of model UIDs from run data
-    job_models = defaultdict(set)
-    for run in runs:
-        job_id = run["job_definition_id"]
-        try:
-            models = fetch_run_models_with_stats(client, job_id, run["id"])
-        except Exception:
-            continue
-        for m in models:
-            mat = m.get("materializedType")
-            if mat in ("table", "incremental") and m.get("status") == "success":
-                job_models[job_id].add(m["uniqueId"])
-
+def _compute_job_analysis(job_models, scheduled_jobs):
+    """Compute job overlap analysis from pre-built job -> model set mapping."""
     all_job_ids = [jid for jid in job_models if jid in scheduled_jobs]
     analysis = []
 
     for jid in all_job_ids:
         info = scheduled_jobs[jid]
-        my_models = job_models[jid]
+        my_models = set(job_models[jid])
         if not my_models:
             continue
 
-        # Overlap with each other job
         overlaps = []
         all_shared = set()
         my_freq = _cron_to_runs_per_day(info["cron"])
@@ -743,7 +832,7 @@ def build_job_analysis(client, days=7):
         for other_jid in all_job_ids:
             if other_jid == jid:
                 continue
-            shared = my_models & job_models[other_jid]
+            shared = my_models & set(job_models[other_jid])
             if not shared:
                 continue
             all_shared |= shared
@@ -772,7 +861,6 @@ def build_job_analysis(client, days=7):
         overlaps.sort(key=lambda x: x["shared_count"], reverse=True)
         redundancy_pct = round(len(all_shared) / len(my_models) * 100, 1) if my_models else 0
 
-        # Unique logic detection from execute steps
         execute_steps = info.get("execute_steps", [])
         unique_flags = set()
         for step in execute_steps:
@@ -819,4 +907,34 @@ def build_job_analysis(client, days=7):
         })
 
     analysis.sort(key=lambda j: j["redundancy_pct"], reverse=True)
-    return project_name, analysis
+    return analysis
+
+
+def build_job_analysis(client, days=7):
+    """Analyze job overlap and redundancy.
+
+    Uses cached aggregate data when available — zero additional API calls
+    if the dashboard or any other tab has already been loaded.
+    """
+    # Try to use cached data from build_aggregate
+    cached = _agg_cache_get(client)
+    if cached is not None:
+        print(f"[{client.name}] Building job analysis from cached aggregate data (no API calls)")
+        job_models = {int(k): v for k, v in cached["job_models"].items()}
+        scheduled_jobs = {int(k): v for k, v in cached["scheduled_jobs"].items()}
+        analysis = _compute_job_analysis(job_models, scheduled_jobs)
+        return cached["project_name"], analysis
+
+    # Cache miss — need to build aggregate first (which caches everything)
+    print(f"[{client.name}] No cached data, building full aggregate for job analysis...")
+    build_aggregate(client, days=days)
+
+    # Now pull from cache
+    cached = _agg_cache_get(client)
+    if cached is None:
+        return "Unknown", []
+
+    job_models = {int(k): v for k, v in cached["job_models"].items()}
+    scheduled_jobs = {int(k): v for k, v in cached["scheduled_jobs"].items()}
+    analysis = _compute_job_analysis(job_models, scheduled_jobs)
+    return cached["project_name"], analysis
