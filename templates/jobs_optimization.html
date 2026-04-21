@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — Jobs Optimization</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e1e4ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c63ff;
+      --green: #34d399;
+      --red: #f87171;
+      --orange: #fbbf24;
+      --blue: #60a5fa;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+    /* Tab nav */
+    .tab-nav { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab:hover { color: var(--text); text-decoration: none; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .tab-spacer { flex: 1; }
+    .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
+    .tab-link:hover { color: var(--accent); text-decoration: none; }
+
+    /* Summary cards */
+    .summary {
+      display: flex;
+      gap: 1.25rem;
+      margin: 1.5rem 0 2rem;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1.25rem;
+      min-width: 120px;
+    }
+    .card .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; }
+    .card .detail { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="text"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      width: 260px;
+    }
+    input::placeholder { color: var(--text-muted); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; position: relative; }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    th, td { border-bottom: 1px solid var(--border); }
+    th {
+      background: #14161e;
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      overflow: hidden;
+    }
+    th:hover { color: var(--text); }
+    th.sorted-asc::after { content: " \25B2"; font-size: 0.55rem; }
+    th.sorted-desc::after { content: " \25BC"; font-size: 0.55rem; }
+    td {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tr:hover td { background: rgba(108, 99, 255, 0.05); }
+    tr.expanded td { background: rgba(108, 99, 255, 0.08); }
+
+    /* Sticky first column */
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--surface);
+      border-right: 2px solid var(--border);
+      max-width: none;
+    }
+    th:first-child { z-index: 3; background: #14161e; }
+    tr:hover td:first-child { background: #1e2130; }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-on { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+    .badge-off { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+    .badge-candidate { background: rgba(248, 113, 113, 0.15); color: var(--red); font-size: 0.6rem; margin-left: 0.4rem; }
+
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+    .muted { color: var(--text-muted); }
+
+    /* Candidate row - subtle red left border */
+    tr.candidate-row > td:first-child {
+      border-left: 3px solid var(--red);
+    }
+
+    /* Clickable row */
+    .job-row { cursor: pointer; }
+
+    /* Detail / expanded row */
+    .detail-row td {
+      padding: 0;
+      background: #12141c;
+    }
+    .detail-row td:first-child {
+      background: #12141c;
+    }
+    tr:hover.detail-row td,
+    tr:hover.detail-row td:first-child {
+      background: #12141c;
+    }
+    .detail-content {
+      padding: 1rem 1.5rem;
+    }
+    .detail-content h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.6rem;
+    }
+    .detail-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .detail-table th {
+      background: #14161e;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.6rem;
+      position: static;
+      cursor: default;
+    }
+    .detail-table td {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.78rem;
+      border-top: 1px solid var(--border);
+      border-bottom: none;
+    }
+    .detail-table th:first-child,
+    .detail-table td:first-child {
+      position: static;
+      border-right: none;
+      background: inherit;
+    }
+    .detail-table tr:hover td { background: rgba(108, 99, 255, 0.05); }
+
+    /* Monospace for execute steps */
+    .mono {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+    }
+
+    /* Resize handle */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      cursor: col-resize;
+      background: transparent;
+    }
+    .resize-handle:hover, .resize-handle.active { background: var(--accent); }
+  </style>
+</head>
+<body>
+  <nav class="tab-nav">
+    <a href="/" class="tab">Dashboard</a>
+    <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <a href="/models-optimization" class="tab">Models Optimization</a>
+    <a href="/jobs-optimization" class="tab active">Jobs Optimization</a>
+    <span class="tab-spacer"></span>
+    <a href="/warehouses" class="tab-link">Warehouse Costs</a>
+    <a href="/setup" class="tab-link">Setup</a>
+  </nav>
+
+  <header>
+    <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Jobs Optimization</span></h1>
+    <div class="subtitle">Scheduled production jobs analyzed for redundancy and consolidation opportunities</div>
+  </header>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Scheduled Jobs</div>
+      <div class="value">{{ jobs | length }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Consolidation Candidates</div>
+      <div class="value" {% if candidate_count > 0 %}style="color: var(--red);"{% endif %}>{{ candidate_count }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Redundant Models</div>
+      <div class="value" {% if total_redundant > 0 %}style="color: var(--orange);"{% endif %}>{{ total_redundant }}</div>
+      <div class="detail">across candidates</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Filter jobs..." oninput="filterTable()">
+  </div>
+
+  <div class="table-wrap">
+  <table id="jobsTable">
+    <thead>
+      <tr>
+        <th data-col="0" onclick="sortTable(0, 'str')">Job Name</th>
+        <th data-col="1" onclick="sortTable(1, 'str')">Schedule</th>
+        <th data-col="2" onclick="sortTable(2, 'num')">Runs/Day</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">SAO</th>
+        <th data-col="4" onclick="sortTable(4, 'num')">Total Models</th>
+        <th data-col="5" onclick="sortTable(5, 'num')">Shared</th>
+        <th data-col="6" onclick="sortTable(6, 'num')">Unique</th>
+        <th data-col="7" onclick="sortTable(7, 'num')">Redundancy %</th>
+        <th data-col="8" onclick="sortTable(8, 'str')">Top Overlap</th>
+        <th data-col="9" onclick="sortTable(9, 'str')">Execute Steps</th>
+        <th data-col="10" onclick="sortTable(10, 'str')">Unique Logic</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr class="job-row{% if j.is_candidate %} candidate-row{% endif %}"
+          data-name="{{ j.name | lower }}"
+          data-idx="{{ loop.index0 }}"
+          onclick="toggleDetail({{ loop.index0 }})">
+        <td>
+          <span style="font-weight: 500;">{{ j.name }}</span>
+          {% if j.is_candidate %}<span class="badge badge-candidate">CANDIDATE</span>{% endif %}
+        </td>
+        <td><span style="font-size: 0.72rem;">{{ j.cadence }}</span></td>
+        <td class="num" data-val="{{ j.runs_per_day }}">{{ j.runs_per_day }}</td>
+        <td>
+          {% if j.sao_enabled %}
+            <span class="badge badge-on">On</span>
+          {% else %}
+            <span class="badge badge-off">Off</span>
+          {% endif %}
+        </td>
+        <td class="num" data-val="{{ j.total_models }}">{{ j.total_models }}</td>
+        <td class="num" data-val="{{ j.shared_models }}">
+          {% if j.shared_models > 0 %}
+            <span style="color: var(--orange);">{{ j.shared_models }}</span>
+          {% else %}
+            {{ j.shared_models }}
+          {% endif %}
+        </td>
+        <td class="num" data-val="{{ j.unique_models }}">{{ j.unique_models }}</td>
+        <td class="num" data-val="{{ j.redundancy_pct }}">
+          {% if j.redundancy_pct >= 75 %}
+            <span style="color: var(--red);">{{ j.redundancy_pct }}%</span>
+          {% elif j.redundancy_pct >= 50 %}
+            <span style="color: var(--orange);">{{ j.redundancy_pct }}%</span>
+          {% elif j.redundancy_pct < 25 %}
+            <span style="color: var(--green);">{{ j.redundancy_pct }}%</span>
+          {% else %}
+            {{ j.redundancy_pct }}%
+          {% endif %}
+        </td>
+        <td>
+          {% if j.overlaps and j.overlaps | length > 0 %}
+            <span style="font-size: 0.75rem;">{{ j.overlaps[0].job_name }}</span>
+            <span class="muted" style="font-size: 0.7rem;">({{ j.overlaps[0].shared_count }} models, {{ j.overlaps[0].shared_pct }}%)</span>
+          {% else %}
+            <span class="muted">--</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if j.execute_steps %}
+            <span class="mono">{{ j.execute_steps | join('<br>') | safe }}</span>
+          {% else %}
+            <span class="muted">--</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if j.has_unique_logic %}
+            <span style="color: var(--orange); font-size: 0.75rem;">{{ j.unique_flags | join(', ') }}</span>
+          {% else %}
+            <span class="muted">None</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr class="detail-row" id="detail-{{ loop.index0 }}" style="display: none;">
+        <td colspan="11">
+          <div class="detail-content">
+            <h4>Overlap Details for {{ j.name }}</h4>
+            {% if j.overlaps and j.overlaps | length > 0 %}
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Overlapping Job</th>
+                  <th>Shared Models</th>
+                  <th>Overlap %</th>
+                  <th>Their Cadence</th>
+                  <th>Cadence Similar?</th>
+                  <th>Less Frequent?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in j.overlaps %}
+                <tr>
+                  <td style="font-weight: 500;">{{ o.job_name }}</td>
+                  <td class="num">{{ o.shared_count }}</td>
+                  <td class="num">{{ o.shared_pct }}%</td>
+                  <td><span style="font-size: 0.72rem;">{{ o.their_cadence }}</span></td>
+                  <td>
+                    {% if o.cadence_similar %}
+                      <span style="color: var(--orange);">Yes</span>
+                    {% else %}
+                      <span class="muted">No</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if o.less_frequent %}
+                      <span style="color: var(--green);">Yes</span>
+                    {% else %}
+                      <span class="muted">No</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+              <span class="muted" style="font-size: 0.8rem;">No overlaps detected for this job.</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <script>
+    /* --- Filter Table --- */
+    function filterTable() {
+      const search = document.getElementById('search').value.toLowerCase();
+      document.querySelectorAll('#jobsTable tbody tr.job-row').forEach(row => {
+        const name = row.dataset.name;
+        const show = !search || name.includes(search);
+        row.style.display = show ? '' : 'none';
+        const detailId = 'detail-' + row.dataset.idx;
+        const detailEl = document.getElementById(detailId);
+        if (detailEl) {
+          detailEl.style.display = 'none';
+          row.classList.remove('expanded');
+        }
+      });
+    }
+
+    /* --- Column Sorting --- */
+    let currentSort = { col: -1, asc: true };
+    let _resizing = false;
+
+    function sortTable(col, type) {
+      if (_resizing) return;
+      if (currentSort.col === col) currentSort.asc = !currentSort.asc;
+      else { currentSort.col = col; currentSort.asc = type === 'str'; }
+
+      document.querySelectorAll('#jobsTable th').forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
+      const th = document.querySelector('#jobsTable th[data-col="' + col + '"]');
+      if (th) th.classList.add(currentSort.asc ? 'sorted-asc' : 'sorted-desc');
+
+      const tbody = document.querySelector('#jobsTable tbody');
+      const rowPairs = [];
+      const rows = Array.from(tbody.querySelectorAll('tr.job-row'));
+
+      rows.forEach(row => {
+        const detail = document.getElementById('detail-' + row.dataset.idx);
+        rowPairs.push([row, detail]);
+      });
+
+      rowPairs.sort((a, b) => {
+        const ra = a[0], rb = b[0];
+        if (type === 'num') {
+          const av = parseFloat(ra.cells[col].dataset.val || ra.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
+          const bv = parseFloat(rb.cells[col].dataset.val || rb.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
+          return currentSort.asc ? av - bv : bv - av;
+        } else {
+          const av = ra.cells[col].textContent.trim().toLowerCase();
+          const bv = rb.cells[col].textContent.trim().toLowerCase();
+          return currentSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+      });
+
+      rowPairs.forEach(([row, detail]) => {
+        tbody.appendChild(row);
+        if (detail) tbody.appendChild(detail);
+      });
+    }
+
+    /* --- Expand / Collapse Detail Rows --- */
+    function toggleDetail(idx) {
+      const el = document.getElementById('detail-' + idx);
+      const row = document.querySelector('tr.job-row[data-idx="' + idx + '"]');
+      if (!el || !row) return;
+      if (el.style.display === 'none') {
+        el.style.display = '';
+        row.classList.add('expanded');
+      } else {
+        el.style.display = 'none';
+        row.classList.remove('expanded');
+      }
+    }
+
+    /* --- Column Resizer --- */
+    function initResize(table) {
+      const cols = table.querySelectorAll('thead th');
+      cols.forEach(th => {
+        th.style.position = 'relative';
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          _resizing = true;
+          handle.classList.add('active');
+          const startX = e.pageX;
+          const startW = th.offsetWidth;
+          function onMove(ev) {
+            th.style.width = Math.max(40, startW + ev.pageX - startX) + 'px';
+            th.style.minWidth = th.style.width;
+          }
+          function onUp() {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            setTimeout(function() { _resizing = false; }, 50);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.appendChild(handle);
+      });
+    }
+    document.querySelectorAll('table').forEach(function(t) { initResize(t); });
+  </script>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">
+  <div class="loading-text" style="color:#e1e4ed;font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;">Loading...</div>
+  <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
+    <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
+  </div>
+</div>
+<style>
+@keyframes loadSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+</style>
+<script>
+document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(function(link) {
+  if (link.getAttribute('href') === window.location.pathname) return;
+  link.addEventListener('click', function() {
+    var overlay = document.getElementById('loadingOverlay'); var lt = overlay ? overlay.querySelector('.loading-text') : null; if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
+    if (overlay) overlay.style.display = 'flex';
+  });
+});
+</script>
+</body>
+</html>

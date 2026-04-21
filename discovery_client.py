@@ -1,10 +1,13 @@
 import json
 import os
+import time
 import requests
 
 
 class DbtClient:
     """Client for querying dbt Cloud Discovery + Admin APIs."""
+
+    MAX_RETRIES = 3
 
     def __init__(self, config):
         self.discovery_url = config["discovery_url"]
@@ -22,12 +25,26 @@ class DbtClient:
             "Authorization": f"Bearer {self.token}",
         }
 
+    def _retry_request(self, request_fn):
+        """Execute a request with retry on 429 rate limits."""
+        for attempt in range(self.MAX_RETRIES):
+            resp = request_fn()
+            if resp.status_code == 429:
+                wait = 2 ** attempt
+                print(f"  Rate limited (429), retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            return resp
+        return resp  # Return last response (will be 429)
+
     def query_discovery(self, graphql_query, variables=None):
         """Execute a GraphQL query against the Discovery API."""
         payload = {"query": graphql_query}
         if variables:
             payload["variables"] = variables
-        response = requests.post(self.discovery_url, json=payload, headers=self.headers)
+        response = self._retry_request(
+            lambda: requests.post(self.discovery_url, json=payload, headers=self.headers)
+        )
         response.raise_for_status()
         result = response.json()
         if "errors" in result:
@@ -37,14 +54,18 @@ class DbtClient:
     def admin_get(self, path, params=None):
         """GET request to the Admin API."""
         url = f"https://{self.host_url}/api/v2/accounts/{self.account_id}/{path}"
-        resp = requests.get(url, params=params, headers=self.admin_headers)
+        resp = self._retry_request(
+            lambda: requests.get(url, params=params, headers=self.admin_headers)
+        )
         resp.raise_for_status()
         return resp.json()
 
     def admin_get_v3(self, path, params=None):
         """GET request to the Admin API v3."""
         url = f"https://{self.host_url}/api/v3/accounts/{self.account_id}/{path}"
-        resp = requests.get(url, params=params, headers=self.admin_headers)
+        resp = self._retry_request(
+            lambda: requests.get(url, params=params, headers=self.admin_headers)
+        )
         resp.raise_for_status()
         return resp.json()
 
