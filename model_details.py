@@ -1,5 +1,23 @@
 import re
+import time
+import threading
 from discovery_client import DbtClient
+
+# In-memory caches with TTL (same pattern as history.py aggregate cache)
+_DETAIL_CACHE = {}
+_PK_CACHE = {}
+_CACHE_LOCK = threading.Lock()
+_CACHE_TTL = 600  # 10 minutes
+
+
+_DBT_BUILTINS = frozenset({
+    "ref", "source", "config", "this", "var", "env_var", "return", "log",
+    "adapter", "exceptions", "set", "is_incremental", "target", "schema",
+    "database", "project_name", "run_started_at", "invocation_id",
+    "graph", "model", "modules", "flags", "execute", "print",
+    "fromjson", "tojson", "fromyaml", "toyaml", "zip", "set_strict",
+    "builtins", "dbt_version", "selected_resources",
+})
 
 
 def compute_complexity(raw_code):
@@ -10,6 +28,14 @@ def compute_complexity(raw_code):
     lower = code.lower()
     lines = code.strip().split("\n")
     non_blank = [l for l in lines if l.strip()]
+
+    # Detect custom macro calls: Jinja expressions containing function calls
+    # that are NOT dbt builtins (ref, source, config, etc.)
+    all_calls = re.findall(r'\{[{%][^}%]*?(\w+)\s*\(', code)
+    custom_macros = sorted(set(
+        name for name in all_calls
+        if name.lower() not in _DBT_BUILTINS
+    ))
 
     return {
         "lines": len(lines),
@@ -26,13 +52,122 @@ def compute_complexity(raw_code):
         "sources": code.count("source("),
         "jinja_blocks": code.count("{%") + code.count("{{"),
         "macros_called": len(re.findall(r"\{\{[^}]*\w+\s*\(", code)),
+        "custom_macros": custom_macros,
+        "has_custom_macros": len(custom_macros) > 0,
         "if_blocks": code.count("{% if") + code.count("{%- if"),
         "for_loops": code.count("{% for") + code.count("{%- for"),
     }
 
 
+def fetch_pk_columns_from_tests(client: DbtClient, max_tests=2000):
+    """Query unique + not_null tests directly from the Discovery API.
+    Results are cached in memory for 10 minutes.
+
+    Returns {model_unique_id: [pk_column_name, ...]} for models where
+    the same column has both a unique and a not_null test defined.
+    """
+    cache_key = str(client.environment_id)
+    with _CACHE_LOCK:
+        entry = _PK_CACHE.get(cache_key)
+        if entry and (time.time() - entry[0]) < _CACHE_TTL:
+            print(f"  PK test data served from cache")
+            return entry[1]
+
+    query = """
+    query ($environmentId: BigInt!, $first: Int!, $after: String) {
+      environment(id: $environmentId) {
+        applied {
+          tests(first: $first, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            edges {
+              node {
+                uniqueId
+                columnName
+                parents { uniqueId }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    all_edges = []
+    cursor = None
+    try:
+        while True:
+            variables = {"environmentId": client.environment_id, "first": max_tests}
+            if cursor:
+                variables["after"] = cursor
+            data = client.query_discovery(query, variables=variables)
+            tests_data = data["environment"]["applied"]["tests"]
+            all_edges.extend(tests_data["edges"])
+            if not tests_data["pageInfo"]["hasNextPage"]:
+                break
+            cursor = tests_data["pageInfo"]["endCursor"]
+    except Exception as e:
+        print(f"  Warning: Could not fetch tests for PK detection: {e}")
+        return {}
+
+    # Build mapping: model_uid -> {col_name: {unique: bool, not_null: bool}}
+    model_col_map = {}
+    for edge in all_edges:
+        node = edge["node"]
+        uid = node.get("uniqueId") or ""
+        col_name = (node.get("columnName") or "").lower()
+        parents = node.get("parents") or []
+
+        # Determine test type from the uniqueId
+        parts = uid.split(".")
+        test_id = parts[2] if len(parts) >= 3 else ""
+        is_unique = test_id.startswith("unique_")
+        is_not_null = test_id.startswith("not_null_")
+        if not (is_unique or is_not_null):
+            continue
+
+        # Find the parent model
+        model_uid = None
+        for p in parents:
+            p_uid = p.get("uniqueId") or ""
+            if p_uid.startswith("model.") or p_uid.startswith("snapshot."):
+                model_uid = p_uid
+                break
+        if not model_uid or not col_name:
+            continue
+
+        if model_uid not in model_col_map:
+            model_col_map[model_uid] = {}
+        if col_name not in model_col_map[model_uid]:
+            model_col_map[model_uid][col_name] = {"unique": False, "not_null": False}
+
+        if is_unique:
+            model_col_map[model_uid][col_name]["unique"] = True
+        elif is_not_null:
+            model_col_map[model_uid][col_name]["not_null"] = True
+
+    # Keep only columns with BOTH tests
+    result = {}
+    for model_uid, cols in model_col_map.items():
+        pk_cols = sorted(
+            col for col, tests in cols.items()
+            if tests["unique"] and tests["not_null"]
+        )
+        if pk_cols:
+            result[model_uid] = pk_cols
+
+    with _CACHE_LOCK:
+        _PK_CACHE[cache_key] = (time.time(), result)
+    return result
+
+
 def fetch_model_details(client: DbtClient, max_models=500):
     """Fetch full model metadata and code for table/incremental models. Paginates."""
+    cache_key = str(client.environment_id)
+    with _CACHE_LOCK:
+        entry = _DETAIL_CACHE.get(cache_key)
+        if entry and (time.time() - entry[0]) < _CACHE_TTL:
+            print(f"  Model details served from cache")
+            return entry[1]
+
     query = """
     query ($environmentId: BigInt!, $first: Int!, $after: String) {
       environment(id: $environmentId) {
@@ -59,7 +194,7 @@ def fetch_model_details(client: DbtClient, max_models=500):
                 tags
                 fqn
                 catalog {
-                  columns { name }
+                  columns { name type }
                 }
                 children { uniqueId resourceType }
               }
@@ -94,7 +229,7 @@ def fetch_model_details(client: DbtClient, max_models=500):
         compiled_code = node.get("compiledCode") or ""
         complexity = compute_complexity(raw_code)
 
-        # Date column detection from catalog
+        # Date/timeseries column detection from catalog
         catalog = node.get("catalog") or {}
         col_data = catalog.get("columns") or []
         column_names = [c.get("name", "").lower() for c in col_data]
@@ -102,6 +237,29 @@ def fetch_model_details(client: DbtClient, max_models=500):
         has_date_column = any(
             any(ind in cn for ind in date_indicators) for cn in column_names
         )
+
+        # Classify as Date vs Timeseries based on column types
+        # Timeseries indicators: timestamp/datetime types, or column names with
+        # timestamp/_at/created/updated/modified patterns
+        timeseries_type_patterns = ("timestamp", "datetime")
+        timeseries_name_patterns = ("timestamp", "_at", "created", "updated", "modified")
+        date_type = None
+        if has_date_column:
+            is_timeseries = False
+            for c in col_data:
+                cn = (c.get("name") or "").lower()
+                ct = (c.get("type") or "").lower()
+                if not any(ind in cn for ind in date_indicators):
+                    continue
+                # Check type first
+                if any(tp in ct for tp in timeseries_type_patterns):
+                    is_timeseries = True
+                    break
+                # Check name patterns associated with timeseries
+                if any(tp in cn for tp in timeseries_name_patterns):
+                    is_timeseries = True
+                    break
+            date_type = "Timeseries" if is_timeseries else "Date"
 
         # Window function detection (any analytic OVER clause)
         lower_raw = raw_code.lower()
@@ -176,6 +334,7 @@ def fetch_model_details(client: DbtClient, max_models=500):
             "external_volume": external_volume,
             "column_names": column_names,
             "has_date_column": has_date_column,
+            "date_type": date_type,
             "has_window_function": has_window_function,
             "has_potential_pk": has_potential_pk,
             "contract_enforced": contract_enforced,
@@ -189,4 +348,7 @@ def fetch_model_details(client: DbtClient, max_models=500):
         })
 
     models.sort(key=lambda m: m.get("lines", 0), reverse=True)
+
+    with _CACHE_LOCK:
+        _DETAIL_CACHE[cache_key] = (time.time(), models)
     return models

@@ -40,6 +40,11 @@ def _agg_cache_set(client, data):
         _AGGREGATE_CACHE[key] = (time.time(), data)
 
 
+def is_aggregate_cached(client):
+    """Check if aggregate data is available in memory cache."""
+    return _agg_cache_get(client) is not None
+
+
 # ---------------------------------------------------------------------------
 # Disk cache for individual API responses
 # ---------------------------------------------------------------------------
@@ -662,6 +667,7 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             "job3_sao": _job_sao(job3_id),
             "proj_job_runs": proj_job_runs,
             "avg_execution_time": sum(exec_times) / len(exec_times) if exec_times else None,
+            "p95_execution_time": sorted(exec_times)[int(len(exec_times) * 0.95)] if exec_times else None,
             "max_execution_time": max(exec_times) if exec_times else None,
             "min_execution_time": min(exec_times) if exec_times else None,
             "total_execution_time": sum(exec_times) if exec_times else None,
@@ -739,6 +745,17 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         "disabled_jobs": disabled_jobs,
     }
 
+    # Build per-job run stats (execution times, daily counts) for jobs optimization
+    job_run_stats = defaultdict(lambda: {"durations": [], "daily_counts": Counter()})
+    for run in runs:
+        jid = run["job_definition_id"]
+        dur = run.get("duration_in_sec")
+        if dur is not None:
+            job_run_stats[jid]["durations"].append(float(dur))
+        day = run.get("created_at", "")[:10]
+        if day:
+            job_run_stats[jid]["daily_counts"][day] += 1
+
     # Cache everything — including job_models for the jobs optimization tab
     _agg_cache_set(client, {
         "project_name": project_name,
@@ -749,6 +766,7 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
         "top_project_jobs": top_project_jobs_info,
         "job_models": {jid: list(uids) for jid, uids in job_models.items()},
         "scheduled_jobs": scheduled_jobs,
+        "job_run_stats": {jid: {"durations": s["durations"], "daily_counts": dict(s["daily_counts"])} for jid, s in job_run_stats.items()},
     })
 
     return project_name, aggregated, len(runs), high_cost_ids, sao_status, top_project_jobs_info
@@ -814,9 +832,10 @@ def _cron_to_runs_per_day(cron_expr):
     return hours * days_ratio
 
 
-def _compute_job_analysis(job_models, scheduled_jobs):
+def _compute_job_analysis(job_models, scheduled_jobs, job_run_stats=None):
     """Compute job overlap analysis from pre-built job -> model set mapping."""
     all_job_ids = [jid for jid in job_models if jid in scheduled_jobs]
+    job_run_stats = job_run_stats or {}
     analysis = []
 
     for jid in all_job_ids:
@@ -878,15 +897,14 @@ def _compute_job_analysis(job_models, scheduled_jobs):
         unique_flags = sorted(unique_flags)
         has_unique_logic = bool(unique_flags)
 
-        has_cadence_match = any(
-            ov.get("cadence_similar") or ov.get("this_less_frequent")
-            for ov in overlaps
-        )
-        is_candidate = (
-            redundancy_pct >= 50
-            and not has_unique_logic
-            and has_cadence_match
-        )
+        # Job-level execution time stats and max daily runs
+        stats = job_run_stats.get(jid, {})
+        durations = stats.get("durations", [])
+        daily_counts = stats.get("daily_counts", {})
+        max_daily_runs = max(daily_counts.values()) if daily_counts else 0
+        total_runs = sum(daily_counts.values()) if daily_counts else 0
+        avg_duration = sum(durations) / len(durations) if durations else None
+        p95_duration = sorted(durations)[int(len(durations) * 0.95)] if durations else None
 
         analysis.append({
             "job_id": jid,
@@ -896,6 +914,10 @@ def _compute_job_analysis(job_models, scheduled_jobs):
             "sao_enabled": info["sao_enabled"],
             "execute_steps": execute_steps,
             "runs_per_day": round(my_freq, 1),
+            "max_daily_runs": max_daily_runs,
+            "total_runs": total_runs,
+            "avg_duration": avg_duration,
+            "p95_duration": p95_duration,
             "total_models": len(my_models),
             "shared_models": len(all_shared),
             "unique_models": len(my_models) - len(all_shared),
@@ -903,7 +925,6 @@ def _compute_job_analysis(job_models, scheduled_jobs):
             "overlaps": overlaps[:5],
             "has_unique_logic": has_unique_logic,
             "unique_flags": unique_flags,
-            "is_candidate": is_candidate,
         })
 
     analysis.sort(key=lambda j: j["redundancy_pct"], reverse=True)
@@ -922,7 +943,8 @@ def build_job_analysis(client, days=7):
         print(f"[{client.name}] Building job analysis from cached aggregate data (no API calls)")
         job_models = {int(k): v for k, v in cached["job_models"].items()}
         scheduled_jobs = {int(k): v for k, v in cached["scheduled_jobs"].items()}
-        analysis = _compute_job_analysis(job_models, scheduled_jobs)
+        jrs = {int(k): v for k, v in cached.get("job_run_stats", {}).items()}
+        analysis = _compute_job_analysis(job_models, scheduled_jobs, jrs)
         return cached["project_name"], analysis
 
     # Cache miss — need to build aggregate first (which caches everything)
@@ -936,5 +958,6 @@ def build_job_analysis(client, days=7):
 
     job_models = {int(k): v for k, v in cached["job_models"].items()}
     scheduled_jobs = {int(k): v for k, v in cached["scheduled_jobs"].items()}
-    analysis = _compute_job_analysis(job_models, scheduled_jobs)
+    jrs = {int(k): v for k, v in cached.get("job_run_stats", {}).items()}
+    analysis = _compute_job_analysis(job_models, scheduled_jobs, jrs)
     return cached["project_name"], analysis
