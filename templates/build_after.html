@@ -237,12 +237,6 @@
       <div class="label">Of Total Models</div>
       <div class="value">{{ all_model_count }}</div>
     </div>
-    {% set high_skip = models | selectattr('potential_skip_pct') | selectattr('potential_skip_pct', 'gt', 50) | list %}
-    <div class="card">
-      <div class="label">&gt;50% Potential Skip</div>
-      <div class="value" {% if high_skip | length > 0 %}style="color: var(--green);"{% endif %}>{{ high_skip | length }}</div>
-      <div class="detail">could benefit from build_after</div>
-    </div>
     {% if has_costs %}
     {% set total_weekly = models | sum(attribute='total_cost') %}
     <div class="card">
@@ -264,9 +258,6 @@
     <label style="font-size:0.75rem;color:var(--text-muted);">Min downstream cost $:</label>
     <input type="number" id="minDownCost" min="0" step="0.01" value="" placeholder="--" style="width:80px;" oninput="filterTable()">
     {% endif %}
-    <label style="font-size:0.75rem;color:var(--text-muted);">Min potential skip %:</label>
-    <input type="number" id="minSkipPct" min="0" max="100" value="" placeholder="--" style="width:60px;" oninput="filterTable()">
-
     <div class="multi-select" id="colToggleWrap">
       <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
       <div class="multi-select-dropdown"></div>
@@ -296,11 +287,8 @@
         <th data-col="13" onclick="sortTable(13, 'num')">Max Daily</th>
         <th data-col="14" onclick="sortTable(14, 'num')">Avg Time</th>
         <th data-col="15" onclick="sortTable(15, 'num')">Avg New Rows</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">Change %</th>
-        <th data-col="17" onclick="sortTable(17, 'num')">Potential Skip %</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Rows</th>
-        <th data-col="19" onclick="sortTable(19, 'num')">Row Delta</th>
-        <th data-col="20" onclick="sortTable(20, 'num')">Runs w/ Change</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">Rows</th>
+        <th data-col="17" onclick="sortTable(17, 'num')">Row Delta</th>
       </tr>
     </thead>
     <tbody>
@@ -309,8 +297,7 @@
           data-runs="{{ m.total_runs or 0 }}"
           data-maxdaily="{{ m.max_daily_runs or 0 }}"
           data-avgcost="{{ m.avg_cost or 0 }}"
-          data-downcost="{{ m.downstream_avg_cost or 0 }}"
-          data-skippct="{{ m.potential_skip_pct if m.potential_skip_pct is not none else '' }}">
+          data-downcost="{{ m.downstream_avg_cost or 0 }}">
         <td>
           <div class="model-name">{{ m.name }}</div>
           <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
@@ -354,34 +341,11 @@
         <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
           {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
-        <td class="num" data-val="{{ m.change_pct or 0 }}">
-          {% if m.change_pct is not none %}{{ "%.0f"|format(m.change_pct) }}%{% else %}<span class="muted">--</span>{% endif %}
-        </td>
-        <td class="num" data-val="{{ m.potential_skip_pct or 0 }}">
-          {% if m.potential_skip_pct is not none %}
-            {% if m.potential_skip_pct >= 50 %}
-              <span style="color: var(--green);">{{ "%.0f"|format(m.potential_skip_pct) }}%</span>
-            {% elif m.potential_skip_pct >= 25 %}
-              <span style="color: var(--orange);">{{ "%.0f"|format(m.potential_skip_pct) }}%</span>
-            {% else %}
-              {{ "%.0f"|format(m.potential_skip_pct) }}%
-            {% endif %}
-          {% else %}
-            <span class="muted">--</span>
-          {% endif %}
-        </td>
         <td class="num" data-val="{{ m.latest_rows or 0 }}">
           {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
         <td class="num" data-val="{{ m.row_delta or 0 }}">
           {% if m.row_delta is not none %}{{ "{:,}".format(m.row_delta) }}{% else %}<span class="muted">--</span>{% endif %}
-        </td>
-        <td class="num" data-val="{{ m.runs_with_change or 0 }}">
-          {% if m.runs_with_data is not none and m.runs_with_data > 1 %}
-            {{ m.runs_with_change }} / {{ m.runs_with_data - 1 }}
-          {% else %}
-            <span class="muted">--</span>
-          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -452,7 +416,6 @@
       const minAvgCost = minAvgCostEl ? (parseFloat(minAvgCostEl.value) || 0) : 0;
       const minDownCostEl = document.getElementById('minDownCost');
       const minDownCost = minDownCostEl ? (parseFloat(minDownCostEl.value) || 0) : 0;
-      const minSkipPct = parseFloat(document.getElementById('minSkipPct').value) || 0;
 
       document.querySelectorAll('#mainTable tbody tr').forEach(row => {
         const name = row.dataset.name || '';
@@ -460,7 +423,6 @@
         const maxDaily = parseFloat(row.dataset.maxdaily) || 0;
         const avgCost = parseFloat(row.dataset.avgcost) || 0;
         const downCost = parseFloat(row.dataset.downcost) || 0;
-        const skipPct = row.dataset.skippct !== '' ? parseFloat(row.dataset.skippct) : -1;
 
         let show = true;
         if (search && !name.includes(search)) show = false;
@@ -468,7 +430,6 @@
         if (maxDaily < minMaxDaily) show = false;
         if (avgCost < minAvgCost) show = false;
         if (downCost < minDownCost) show = false;
-        if (minSkipPct > 0 && (skipPct < 0 || skipPct < minSkipPct)) show = false;
         row.style.display = show ? '' : 'none';
       });
     }

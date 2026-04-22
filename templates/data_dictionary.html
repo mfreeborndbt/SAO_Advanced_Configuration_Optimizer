@@ -37,17 +37,69 @@
     .tab-spacer { flex: 1; }
     .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
     .tab-link:hover { color: var(--accent); text-decoration: none; }
+
     .content { max-width: 960px; }
-    .section { margin-bottom: 2.5rem; }
-    .section-header {
-      font-size: 0.65rem;
+
+    /* Bucket tabs */
+    .bucket-nav {
+      display: flex;
+      gap: 0.25rem;
+      margin: 1.5rem 0 1.25rem;
+      flex-wrap: wrap;
+    }
+    .bucket-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .bucket-btn:hover { color: var(--text); border-color: var(--accent); }
+    .bucket-btn.active { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+    .bucket { display: none; }
+    .bucket.active { display: block; }
+
+    /* Collapsible sections within a bucket */
+    .section { margin-bottom: 1rem; }
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 0;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.5rem;
+    }
+    .section-toggle:hover .section-title { color: var(--text); }
+    .section-arrow {
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+      width: 1em;
+      text-align: center;
+    }
+    .section-toggle.open .section-arrow { transform: rotate(90deg); }
+    .section-title {
+      font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--text-muted);
-      margin-bottom: 0.75rem;
-      padding-bottom: 0.4rem;
-      border-bottom: 1px solid var(--border);
+      font-weight: 600;
     }
+    .section-count {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+    .section-body { display: none; margin-bottom: 1rem; }
+    .section-toggle.open + .section-body { display: block; }
+
     table.dict-table {
       width: 100%;
       border-collapse: separate;
@@ -81,9 +133,7 @@
       color: var(--text);
       width: 200px;
     }
-    .dict-table td:last-child {
-      color: var(--text-muted);
-    }
+    .dict-table td:last-child { color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -105,174 +155,315 @@
 
   <div class="content">
 
-    <!-- Model Identity -->
-    <div class="section">
-      <h2 class="section-header">Model Identity</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Model</td><td>The name of a dbt model materialized as a table or incremental table in your data warehouse</td></tr>
-          <tr><td>Schema</td><td>The database and schema where the model is materialized</td></tr>
-          <tr><td>Layer</td><td>First-level folder classification from the dbt project FQN (e.g., staging, intermediate, marts)</td></tr>
-          <tr><td>Folder 1 / 2 / 3</td><td>Directory hierarchy under the models/ directory in the dbt project</td></tr>
-          <tr><td>Type</td><td>Materialization strategy: &ldquo;table&rdquo; (full rebuild each run) or &ldquo;incremental&rdquo; (appends/merges new data)</td></tr>
-          <tr><td>Language</td><td>The model&rsquo;s language: SQL or Python</td></tr>
-          <tr><td>Tags</td><td>dbt tags assigned to the model via config or YAML</td></tr>
-          <tr><td>Warehouse</td><td>The Snowflake warehouse or Databricks compute cluster used to build the model. Orange = model-level override</td></tr>
-        </tbody>
-      </table>
+    <!-- Bucket navigation -->
+    <div class="bucket-nav">
+      <button class="bucket-btn active" onclick="showBucket('general')">Full Model Context</button>
+      <button class="bucket-btn" onclick="showBucket('models-opt')">Models Optimization</button>
+      <button class="bucket-btn" onclick="showBucket('jobs-opt')">Jobs Optimization</button>
+      <button class="bucket-btn" onclick="showBucket('updated-at')">Updated At</button>
+      <button class="bucket-btn" onclick="showBucket('build-after')">Build After</button>
     </div>
 
-    <!-- SAO Configuration -->
-    <div class="section">
-      <h2 class="section-header">SAO Configuration</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>updates_on</td><td>SAO freshness setting controlling rebuild triggers. &ldquo;any&rdquo; (default): rebuild if any upstream changed. &ldquo;all&rdquo;: only rebuild when all upstream dependencies have new data</td></tr>
-          <tr><td>build_after</td><td>SAO freshness setting defining the minimum time between rebuilds (e.g., &ldquo;1 hour&rdquo;, &ldquo;1 day&rdquo;). Prevents excessive rebuilding even when upstream data changes</td></tr>
-        </tbody>
-      </table>
+    <!-- ============================================================ -->
+    <!-- Full Model Context bucket -->
+    <!-- ============================================================ -->
+    <div class="bucket active" id="bucket-general">
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Model Identity</span>
+          <span class="section-count">8 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Model</td><td>The name of a dbt model materialized as a table or incremental table in your data warehouse</td></tr>
+            <tr><td>Schema</td><td>The database and schema where the model is materialized</td></tr>
+            <tr><td>Layer</td><td>First-level folder classification from the dbt project FQN (e.g., staging, intermediate, marts)</td></tr>
+            <tr><td>Folder 1 / 2 / 3</td><td>Directory hierarchy under the models/ directory in the dbt project</td></tr>
+            <tr><td>Type</td><td>Materialization strategy: &ldquo;table&rdquo; (full rebuild each run) or &ldquo;incremental&rdquo; (appends/merges new data)</td></tr>
+            <tr><td>Language</td><td>The model&rsquo;s language: SQL or Python</td></tr>
+            <tr><td>Tags</td><td>dbt tags assigned to the model via config or YAML</td></tr>
+            <tr><td>Warehouse</td><td>The Snowflake warehouse or Databricks compute cluster used to build the model. Orange = model-level override</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">SAO Configuration</span>
+          <span class="section-count">2 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>updates_on</td><td>SAO freshness setting controlling rebuild triggers. &ldquo;any&rdquo; (default): rebuild if any upstream changed. &ldquo;all&rdquo;: only rebuild when all upstream dependencies have new data</td></tr>
+            <tr><td>build_after</td><td>SAO freshness setting defining the minimum time between rebuilds (e.g., &ldquo;1 hour&rdquo;, &ldquo;1 day&rdquo;). Prevents excessive rebuilding even when upstream data changes</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Run Metrics (7-day window)</span>
+          <span class="section-count">8 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Runs</td><td>Total number of successful model builds across all scheduled jobs in the 7-day analysis window</td></tr>
+            <tr><td>Max Daily</td><td>The highest number of runs this model had in any single day</td></tr>
+            <tr><td>Jobs</td><td>Number of distinct scheduled jobs that built this model. &gt;1 indicates job overlap (potential redundancy)</td></tr>
+            <tr><td>MJ1 / MJ2 / MJ3 Name</td><td>Name of the top 3 jobs (by run count for this model) that build this model. &ldquo;MJ&rdquo; = Model Job</td></tr>
+            <tr><td>MJ1 / MJ2 / MJ3 Runs</td><td>Number of times this model was built by each of the top 3 jobs</td></tr>
+            <tr><td>MJ1 / MJ2 / MJ3 Sched</td><td>Human-readable cron schedule for each job</td></tr>
+            <tr><td>MJ1 / MJ2 / MJ3 SAO</td><td>Whether State-Aware Orchestration is enabled on each job (ON/OFF)</td></tr>
+            <tr><td>Env J1-J5</td><td>Project-level top 5 jobs by total runs across all models. Shows how many times each job built this specific model</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Execution Time &amp; Cost</span>
+          <span class="section-count">5 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Total / Avg / Min / Max Time</td><td>Execution time statistics across all runs in the 7-day window</td></tr>
+            <tr><td>Total / Avg / Min / Max Cost</td><td>Estimated dollar costs computed as execution_time &times; cost_per_second. Cost per second is derived from the warehouse size mapping configured in Settings</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Row Metrics</span>
+          <span class="section-count">6 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Rows (start / now)</td><td>Row count from the earliest and most recent run in the 7-day window</td></tr>
+            <tr><td>Row Delta</td><td>Net change in row count: Rows (now) minus Rows (start)</td></tr>
+            <tr><td>Avg New Rows</td><td>Estimated average rows added per run (Row Delta / Total Runs)</td></tr>
+            <tr><td>Runs with Change</td><td>Number of consecutive run pairs where the row count changed</td></tr>
+            <tr><td>Columns</td><td>Number of columns in the model&rsquo;s catalog</td></tr>
+            <tr><td>Values</td><td>Total data points: Rows (now) &times; Columns</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Lineage &amp; Dependencies</span>
+          <span class="section-count">4 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Upstream Tables</td><td>Count of direct parent models materialized as table or incremental</td></tr>
+            <tr><td>Upstream Avg Cost</td><td>Sum of upstream models&rsquo; average per-run costs</td></tr>
+            <tr><td>Downstream Tables</td><td>Count of all transitive downstream models materialized as table or incremental (full BFS traversal)</td></tr>
+            <tr><td>Downstream Avg Cost</td><td>Sum of downstream models&rsquo; average per-run costs. Represents the cascade cost triggered by rebuilding this model</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Run Metrics (7-day window) -->
-    <div class="section">
-      <h2 class="section-header">Run Metrics (7-day window)</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Runs</td><td>Total number of successful model builds across all scheduled jobs in the 7-day analysis window</td></tr>
-          <tr><td>Max Daily</td><td>The highest number of runs this model had in any single day</td></tr>
-          <tr><td>Jobs</td><td>Number of distinct scheduled jobs that built this model. &gt;1 indicates job overlap (potential redundancy)</td></tr>
-          <tr><td>MJ1 / MJ2 / MJ3 Name</td><td>Name of the top 3 jobs (by run count for this model) that build this model. "MJ" = Model Job</td></tr>
-          <tr><td>MJ1 / MJ2 / MJ3 Runs</td><td>Number of times this model was built by each of the top 3 jobs</td></tr>
-          <tr><td>MJ1 / MJ2 / MJ3 Sched</td><td>Human-readable cron schedule for each job</td></tr>
-          <tr><td>MJ1 / MJ2 / MJ3 SAO</td><td>Whether State-Aware Orchestration is enabled on each job (ON/OFF)</td></tr>
-          <tr><td>Env J1-J5</td><td>Project-level top 5 jobs by total runs across all models. Shows how many times each job built this specific model. Hover the column header for job name and cadence</td></tr>
-        </tbody>
-      </table>
+    <!-- ============================================================ -->
+    <!-- Models Optimization bucket -->
+    <!-- ============================================================ -->
+    <div class="bucket" id="bucket-models-opt">
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Incremental Readiness Signals</span>
+          <span class="section-count">4 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Primary Key</td><td>The detected primary key column(s). Sources checked in priority order: (1) columns with both unique and not_null tests defined (queried directly from the Discovery API), (2) unique_key from dbt model config. Green = tests verified passing, blue = tests defined</td></tr>
+            <tr><td>Date / Timeseries</td><td>Whether the model has a date or timeseries column suitable for incremental partitioning</td></tr>
+            <tr><td>% New Rows</td><td>Average new rows per run as a percentage of total rows (avg_new_rows / latest_rows &times; 100). Lower values = better incremental candidate</td></tr>
+            <tr><td>Macros</td><td>Custom (non-builtin) dbt macros detected in the model SQL. Models with custom macros may require macro changes for incremental conversion</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Complexity Signals</span>
+          <span class="section-count">3 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Window Functions</td><td>Count of OVER() clauses (analytic functions). Models with window functions are harder to convert to incremental</td></tr>
+            <tr><td>GROUP BYs</td><td>Number of GROUP BY clauses</td></tr>
+            <tr><td>UNIONs</td><td>Number of UNION / UNION ALL operations</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Impact &amp; Performance</span>
+          <span class="section-count">5 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Rows</td><td>Latest row count from the most recent run</td></tr>
+            <tr><td>Avg Time / p95 Time</td><td>Mean and 95th-percentile execution time per run. Large gaps between avg and p95 indicate high variance</td></tr>
+            <tr><td>Avg Cost</td><td>Estimated dollar cost per run based on warehouse size mapping</td></tr>
+            <tr><td>Runs</td><td>Number of times the model ran from scheduled jobs in the past week</td></tr>
+            <tr><td>Downstream</td><td>Count of all downstream table/incremental models. Higher = more cascade performance impact from optimizing this model</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Execution Time -->
-    <div class="section">
-      <h2 class="section-header">Execution Time</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Total Time</td><td>Sum of execution times across all runs in the 7-day window</td></tr>
-          <tr><td>Avg Time</td><td>Mean execution time per run</td></tr>
-          <tr><td>Min Time</td><td>Fastest execution time observed</td></tr>
-          <tr><td>Max Time</td><td>Slowest execution time observed</td></tr>
-        </tbody>
-      </table>
+    <!-- ============================================================ -->
+    <!-- Jobs Optimization bucket -->
+    <!-- ============================================================ -->
+    <div class="bucket" id="bucket-jobs-opt">
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Job Configuration &amp; Performance</span>
+          <span class="section-count">7 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Schedule</td><td>The cron expression and human-readable cadence for the job</td></tr>
+            <tr><td>Max Daily</td><td>Highest number of runs this job had in a single day during the 7-day window</td></tr>
+            <tr><td>Runs</td><td>Total number of successful job runs in the 7-day window</td></tr>
+            <tr><td>Avg Time</td><td>Mean job execution time (wall-clock duration) across all runs</td></tr>
+            <tr><td>p95 Time</td><td>95th-percentile job execution time. Large gaps vs avg indicate high variance / skew</td></tr>
+            <tr><td>SAO Enabled</td><td>Whether State-Aware Orchestration is enabled on this job</td></tr>
+            <tr><td>Execute Steps</td><td>The dbt CLI commands configured in the job (e.g., dbt build, dbt run --full-refresh)</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Overlap &amp; Redundancy</span>
+          <span class="section-count">6 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Total Models</td><td>Number of table/incremental models successfully built by this job</td></tr>
+            <tr><td>Shared Models</td><td>Models in this job that are also built by at least one other job</td></tr>
+            <tr><td>Unique Models</td><td>Models that are exclusively built by this job and no other</td></tr>
+            <tr><td>Redundancy %</td><td>Percentage of the job&rsquo;s models that overlap with other jobs: Shared / Total &times; 100</td></tr>
+            <tr><td>Top Overlap 1 / 2 / 3</td><td>The top 3 other jobs with the most model overlap, showing job name, shared model count, and overlap percentage</td></tr>
+            <tr><td>Unique Logic</td><td>Special operations: full-refresh, seed, snapshot, source freshness, run-operation</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Cost Estimates -->
-    <div class="section">
-      <h2 class="section-header">Cost Estimates</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Total / Avg / Min / Max Cost</td><td>Estimated dollar costs computed as execution_time x cost_per_second. Cost per second is derived from the warehouse size mapping configured in the Warehouse Costs settings</td></tr>
-        </tbody>
-      </table>
+    <!-- ============================================================ -->
+    <!-- Updated At bucket -->
+    <!-- ============================================================ -->
+    <div class="bucket" id="bucket-updated-at">
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Static Data Detection</span>
+          <span class="section-count">3 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Is Static</td><td>Model never changed rows across multiple runs in the 7-day window (row delta = 0 with &gt;1 data point)</td></tr>
+            <tr><td>Static Upstream</td><td>Whether any upstream table/incremental model is static (never changes)</td></tr>
+            <tr><td>Static Count</td><td>Number of upstream models that are static</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">SAO &amp; Lineage</span>
+          <span class="section-count">5 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>updates_on</td><td>Current SAO freshness setting for rebuild triggers</td></tr>
+            <tr><td>Upstream Tbls</td><td>Count of direct parent models materialized as table or incremental. Green highlight for 2-5 (ideal for updates_on: all)</td></tr>
+            <tr><td>Upstream / Downstream Cost</td><td>Sum of upstream or downstream models&rsquo; average per-run costs</td></tr>
+            <tr><td>Downstream Tbls</td><td>Count of transitive downstream table/incremental models</td></tr>
+            <tr><td>Avg New Rows</td><td>Estimated average rows added per run</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Row Metrics -->
-    <div class="section">
-      <h2 class="section-header">Row Metrics</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Rows (start)</td><td>Row count from the earliest run in the 7-day window</td></tr>
-          <tr><td>Rows (now)</td><td>Row count from the most recent run</td></tr>
-          <tr><td>Row Delta</td><td>Net change in row count: Rows (now) minus Rows (start)</td></tr>
-          <tr><td>Runs with Change</td><td>Number of consecutive run pairs where the row count changed</td></tr>
-          <tr><td>Change %</td><td>Percentage of run pairs that showed a row count change. 0% = completely static data</td></tr>
-          <tr><td>Avg New Rows</td><td>Estimated average rows added per run (Row Delta / Total Runs)</td></tr>
-          <tr><td>Columns</td><td>Number of columns in the model&rsquo;s catalog</td></tr>
-          <tr><td>Values</td><td>Total data points: Rows (now) x Columns</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- ============================================================ -->
+    <!-- Build After bucket -->
+    <!-- ============================================================ -->
+    <div class="bucket" id="bucket-build-after">
 
-    <!-- Lineage & Dependencies -->
-    <div class="section">
-      <h2 class="section-header">Lineage &amp; Dependencies</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Upstream Tables</td><td>Count of direct parent models materialized as table or incremental</td></tr>
-          <tr><td>Upstream Avg Cost</td><td>Sum of upstream models&rsquo; average per-run costs</td></tr>
-          <tr><td>Downstream Tables</td><td>Count of all transitive downstream models materialized as table or incremental (full BFS traversal)</td></tr>
-          <tr><td>Downstream Avg Cost</td><td>Sum of downstream models&rsquo; average per-run costs. Represents the cascade cost triggered by rebuilding this model</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Build Frequency</span>
+          <span class="section-count">4 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>build_after</td><td>Current SAO freshness setting for minimum time between rebuilds</td></tr>
+            <tr><td>Runs</td><td>Total successful builds in the 7-day window</td></tr>
+            <tr><td>Max Daily</td><td>Highest number of runs in a single day. High values with low row change suggest excessive rebuilding</td></tr>
+            <tr><td>Avg New Rows</td><td>Estimated average rows added per run</td></tr>
+          </tbody></table>
+        </div>
+      </div>
 
-    <!-- Models Optimization Tab -->
-    <div class="section">
-      <h2 class="section-header">Models Optimization Tab</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Qualification</td><td>Why the model was flagged: meets row/time thresholds (1M+ rows AND &gt;1 min avg) or is in the top 20% most expensive per run. Models with any window functions (OVER clauses) are excluded</td></tr>
-          <tr><td>Primary Key</td><td>Detected via: (1) unique_key in dbt config, (2) contract enforcement, or (3) a column with both unique and not_null tests defined. The PK Columns field shows which columns were identified through tests</td></tr>
-          <tr><td>PK Columns (from tests)</td><td>Columns that have both a unique test AND a not_null test, making them strong primary key candidates for incremental strategy</td></tr>
-          <tr><td>Has Date Column</td><td>Whether any column name contains date-related patterns (date, timestamp, _at, created, updated, modified). Useful for incremental strategies based on date partitioning</td></tr>
-          <tr><td>Lines of Code</td><td>Total line count of the model&rsquo;s raw SQL file</td></tr>
-          <tr><td>Joins</td><td>Number of JOIN clauses in the SQL</td></tr>
-          <tr><td>CTEs</td><td>Number of Common Table Expressions (WITH ... AS (...))</td></tr>
-          <tr><td>Subqueries</td><td>Nested SELECT statements beyond the primary query</td></tr>
-          <tr><td>Window Functions</td><td>Count of OVER() clauses (window/analytic functions)</td></tr>
-          <tr><td>CASE Statements</td><td>Number of CASE WHEN expressions</td></tr>
-          <tr><td>GROUP BYs</td><td>Number of GROUP BY clauses</td></tr>
-          <tr><td>UNIONs</td><td>Number of UNION / UNION ALL operations</td></tr>
-          <tr><td>Refs</td><td>Count of ref() macro calls (dbt model references)</td></tr>
-          <tr><td>Sources</td><td>Count of source() macro calls (external source references)</td></tr>
-          <tr><td>Jinja Blocks</td><td>Total Jinja template expressions ({{ '{{' }} {{ '}}' }} and {{ '{%' }} {{ '%}' }} blocks)</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <div class="section">
+        <div class="section-toggle open" onclick="toggleSection(this)">
+          <span class="section-arrow">&#9654;</span>
+          <span class="section-title">Cost &amp; Impact</span>
+          <span class="section-count">4 fields</span>
+        </div>
+        <div class="section-body">
+          <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
+            <tr><td>Avg Cost</td><td>Estimated dollar cost per run</td></tr>
+            <tr><td>Total Cost</td><td>Sum of costs across all runs in the 7-day window</td></tr>
+            <tr><td>Downstream Cost</td><td>Sum of downstream models&rsquo; average per-run costs</td></tr>
+            <tr><td>Downstream Tbls</td><td>Count of transitive downstream table/incremental models</td></tr>
+          </tbody></table>
+        </div>
+      </div>
 
-    <!-- Jobs Optimization Tab -->
-    <div class="section">
-      <h2 class="section-header">Jobs Optimization Tab</h2>
-      <table class="dict-table">
-        <thead>
-          <tr><th>Term</th><th>Definition</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Schedule</td><td>The cron expression and human-readable cadence for the job</td></tr>
-          <tr><td>SAO Enabled</td><td>Whether State-Aware Orchestration is enabled on this job</td></tr>
-          <tr><td>Total Models</td><td>Number of table/incremental models successfully built by this job</td></tr>
-          <tr><td>Shared Models</td><td>Models in this job that are also built by at least one other job</td></tr>
-          <tr><td>Unique Models</td><td>Models that are exclusively built by this job and no other</td></tr>
-          <tr><td>Redundancy %</td><td>Percentage of the job&rsquo;s models that overlap with other jobs: Shared / Total x 100</td></tr>
-          <tr><td>Execute Steps</td><td>The dbt CLI commands configured in the job (e.g., dbt build, dbt run --full-refresh)</td></tr>
-          <tr><td>Unique Logic</td><td>Special operations that make this job non-consolidatable: full-refresh, seed, snapshot, source freshness, run-operation</td></tr>
-          <tr><td>Consolidation Candidate</td><td>Flagged when: redundancy &ge; 50%, no unique logic, and similar or less frequent cadence compared to overlapping jobs</td></tr>
-        </tbody>
-      </table>
     </div>
 
   </div>
+
+  <script>
+    function showBucket(id) {
+      document.querySelectorAll('.bucket').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.bucket-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('bucket-' + id).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+
+    function toggleSection(el) {
+      el.classList.toggle('open');
+    }
+  </script>
 
 <!-- Loading overlay -->
 <div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,17,23,0.95);z-index:9999;justify-content:center;align-items:center;flex-direction:column;">

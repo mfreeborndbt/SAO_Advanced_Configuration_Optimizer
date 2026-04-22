@@ -1,9 +1,13 @@
+import json
 import os
+import queue
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash
+import sys
+import threading
+from flask import Flask, render_template, request, redirect, url_for, flash, Response
 from discovery_client import load_credentials, save_credentials, get_client_from_config
-from history import build_aggregate, build_job_analysis, fetch_latest_test_results
-from model_details import fetch_model_details
+from history import build_aggregate, build_job_analysis, fetch_latest_test_results, is_aggregate_cached
+from model_details import fetch_model_details, fetch_pk_columns_from_tests
 from warehouse_config import (
     discover_warehouses,
     get_warehouse_config,
@@ -15,6 +19,57 @@ from warehouse_config import (
 
 app = Flask(__name__)
 app.secret_key = "dbt-observability-setup-key"
+
+
+# ---------------------------------------------------------------------------
+# Log capture for streaming loading progress to the browser
+# ---------------------------------------------------------------------------
+
+class LogTee:
+    """Tee stdout to both the original stream and a queue for SSE streaming.
+
+    Intentionally does NOT inherit from io.TextIOBase — its internal RLock
+    causes deadlocks when ThreadPoolExecutor workers all print simultaneously.
+    """
+    def __init__(self, original, q):
+        self.original = original
+        self.queue = q
+
+    def write(self, text):
+        self.original.write(text)
+        stripped = text.rstrip()
+        if stripped:
+            self.queue.put(stripped)
+        return len(text)
+
+    def flush(self):
+        self.original.flush()
+
+    # Delegate everything else to the original stream so libraries
+    # that inspect stdout (isatty, fileno, encoding, etc.) keep working.
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
+def _preload_page(page):
+    """Run all data loading for a page, warming caches."""
+    creds = load_credentials()
+    if creds is None:
+        raise Exception("Not configured")
+    client = get_client_from_config()
+
+    if page in ("/", "/models-optimization", "/updated-at", "/build-after"):
+        _load_models_with_costs()
+    if page == "/models-optimization":
+        print("Fetching model details...")
+        fetch_model_details(client)
+        print("Fetching test results...")
+        fetch_latest_test_results(client, days=7)
+        print("Fetching primary key tests...")
+        fetch_pk_columns_from_tests(client)
+        print("Models optimization data ready.")
+    elif page == "/jobs-optimization":
+        build_job_analysis(client, days=7)
 
 
 def _env_key_from_config():
@@ -125,8 +180,81 @@ def _load_models_with_costs():
     return project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs
 
 
+def _needs_loading(page):
+    """Check if we should redirect to the loading page (cache is cold)."""
+    creds = load_credentials()
+    if creds is None:
+        return False  # will redirect to setup
+    client = get_client_from_config()
+    if client is None:
+        return False
+    return not is_aggregate_cached(client)
+
+
+@app.route("/loading")
+def loading():
+    next_page = request.args.get("next", "/")
+    creds = load_credentials()
+    project_name = creds.get("name", "Project") if creds else "Project"
+    # Map page paths to display names
+    page_names = {
+        "/": "Full Model Context",
+        "/models-optimization": "Models Optimization",
+        "/jobs-optimization": "Jobs Optimization",
+        "/updated-at": "Updated At",
+        "/build-after": "Build After",
+    }
+    page_name = page_names.get(next_page, next_page)
+    return render_template("loading.html", next_page=next_page, page_name=page_name, project_name=project_name)
+
+
+@app.route("/api/load")
+def api_load():
+    page = request.args.get("page", "/")
+
+    def generate():
+        q = queue.Queue()
+        result = {"status": "done", "error": None}
+
+        def do_load():
+            old_stdout = sys.stdout
+            sys.stdout = LogTee(old_stdout, q)
+            try:
+                _preload_page(page)
+            except Exception as e:
+                result["status"] = "error"
+                result["error"] = str(e)
+            finally:
+                sys.stdout = old_stdout
+                q.put(None)  # sentinel
+
+        thread = threading.Thread(target=do_load, daemon=True)
+        thread.start()
+
+        while True:
+            try:
+                msg = q.get(timeout=0.5)
+                if msg is None:
+                    if result["status"] == "done":
+                        yield f"data: {json.dumps({'type': 'done', 'redirect': page})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'type': 'error', 'message': result['error']})}\n\n"
+                    break
+                yield f"data: {json.dumps({'type': 'log', 'message': msg})}\n\n"
+            except queue.Empty:
+                yield ": heartbeat\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.route("/")
 def index():
+    if _needs_loading("/"):
+        return redirect(url_for("loading", next="/"))
     try:
         result = _load_models_with_costs()
     except ApiAuthError:
@@ -163,6 +291,8 @@ def data_dictionary():
 
 @app.route("/models-optimization")
 def models_optimization():
+    if _needs_loading("/models-optimization"):
+        return redirect(url_for("loading", next="/models-optimization"))
     try:
         result = _load_models_with_costs()
     except ApiAuthError:
@@ -173,11 +303,12 @@ def models_optimization():
 
     project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
 
-    # Fetch code-level details and test results for enrichment
+    # Fetch code-level details, test results, and PK tests for enrichment
     client = get_client_from_config()
     detail_models = fetch_model_details(client)
     details_lookup = {m["unique_id"]: m for m in detail_models}
     test_results = fetch_latest_test_results(client, days=7)
+    pk_cols_from_api = fetch_pk_columns_from_tests(client)
 
     # Compute top 20% expense threshold (per run)
     if has_costs:
@@ -238,6 +369,34 @@ def models_optimization():
         # likely_pass_pk: either or both are true
         enriched["likely_pass_pk"] = pk_test or enriched["pk_values"]
 
+        # Consolidated primary key column.
+        # Priority: (1) Direct API test query (most reliable — same source as dbt Cloud PK badge)
+        #           (2) Children-based test parsing (fallback)
+        #           (3) unique_key from config
+        api_pk_cols = pk_cols_from_api.get(m["unique_id"], [])
+        children_pk_cols = details.get("pk_columns_from_tests", [])
+        if api_pk_cols:
+            enriched["primary_key_cols"] = api_pk_cols
+            enriched["pk_verified"] = True
+        elif children_pk_cols:
+            enriched["primary_key_cols"] = list(children_pk_cols)
+            enriched["pk_verified"] = bool(pk_test_cols)
+        elif details.get("unique_key"):
+            uk = details["unique_key"]
+            enriched["primary_key_cols"] = uk if isinstance(uk, list) else [uk]
+            enriched["pk_verified"] = False
+        else:
+            enriched["primary_key_cols"] = []
+            enriched["pk_verified"] = False
+
+        # Percent of new rows per run
+        avg_new = enriched.get("avg_new_rows")
+        latest = enriched.get("latest_rows")
+        if avg_new is not None and latest and latest > 0:
+            enriched["new_rows_pct"] = round(avg_new / latest * 100, 2)
+        else:
+            enriched["new_rows_pct"] = None
+
         qualifications = []
         if size_time_qualifies:
             qualifications.append(f"{rows:,} rows, {fmt_duration(avg_time)} avg")
@@ -263,6 +422,8 @@ def models_optimization():
 
 @app.route("/jobs-optimization")
 def jobs_optimization():
+    if _needs_loading("/jobs-optimization"):
+        return redirect(url_for("loading", next="/jobs-optimization"))
     creds = load_credentials()
     if creds is None:
         return redirect(url_for("setup"))
@@ -279,16 +440,11 @@ def jobs_optimization():
             return redirect(url_for("setup"))
         raise
 
-    candidate_count = sum(1 for j in jobs if j["is_candidate"])
-    total_redundant = sum(j["shared_models"] for j in jobs if j["is_candidate"])
-
     return render_template(
         "jobs_optimization.html",
         project_name=project_name,
         env_name=account_name,
         jobs=jobs,
-        candidate_count=candidate_count,
-        total_redundant=total_redundant,
         active_tab="jobs_optimization",
     )
 
@@ -388,6 +544,8 @@ def warehouses():
 
 @app.route("/updated-at")
 def updated_at():
+    if _needs_loading("/updated-at"):
+        return redirect(url_for("loading", next="/updated-at"))
     try:
         result = _load_models_with_costs()
     except ApiAuthError:
@@ -442,6 +600,8 @@ def updated_at():
 
 @app.route("/build-after")
 def build_after():
+    if _needs_loading("/build-after"):
+        return redirect(url_for("loading", next="/build-after"))
     try:
         result = _load_models_with_costs()
     except ApiAuthError:
@@ -462,12 +622,6 @@ def build_after():
 
         # Compute "potential skip %" — % of runs that had NO row changes
         # This approximates how often SAO could skip this model
-        change_pct = m.get("change_pct")
-        if change_pct is not None:
-            m["potential_skip_pct"] = round(100 - change_pct, 1)
-        else:
-            m["potential_skip_pct"] = None
-
         candidates.append(m)
 
     candidates.sort(key=lambda m: m.get("avg_cost") or m.get("avg_execution_time") or 0, reverse=True)
@@ -502,4 +656,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5555)
     args = parser.parse_args()
-    app.run(port=args.port, use_reloader=False)
+    app.run(port=args.port, use_reloader=False, threaded=True)

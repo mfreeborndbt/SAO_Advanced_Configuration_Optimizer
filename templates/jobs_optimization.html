@@ -244,15 +244,6 @@
       <div class="label">Scheduled Jobs</div>
       <div class="value">{{ jobs | length }}</div>
     </div>
-    <div class="card">
-      <div class="label">Consolidation Candidates</div>
-      <div class="value" {% if candidate_count > 0 %}style="color: var(--red);"{% endif %}>{{ candidate_count }}</div>
-    </div>
-    <div class="card">
-      <div class="label">Redundant Models</div>
-      <div class="value" {% if total_redundant > 0 %}style="color: var(--orange);"{% endif %}>{{ total_redundant }}</div>
-      <div class="detail">across candidates</div>
-    </div>
   </div>
 
   <div class="controls">
@@ -265,29 +256,42 @@
       <tr>
         <th data-col="0" onclick="sortTable(0, 'str')">Job Name</th>
         <th data-col="1" onclick="sortTable(1, 'str')">Schedule</th>
-        <th data-col="2" onclick="sortTable(2, 'num')">Runs/Day</th>
-        <th data-col="3" onclick="sortTable(3, 'str')">SAO</th>
-        <th data-col="4" onclick="sortTable(4, 'num')">Total Models</th>
-        <th data-col="5" onclick="sortTable(5, 'num')">Shared</th>
-        <th data-col="6" onclick="sortTable(6, 'num')">Unique</th>
-        <th data-col="7" onclick="sortTable(7, 'num')">Redundancy %</th>
-        <th data-col="8" onclick="sortTable(8, 'str')">Top Overlap</th>
-        <th data-col="9" onclick="sortTable(9, 'str')">Execute Steps</th>
-        <th data-col="10" onclick="sortTable(10, 'str')">Unique Logic</th>
+        <th data-col="2" onclick="sortTable(2, 'num')">Max Daily</th>
+        <th data-col="3" onclick="sortTable(3, 'num')">Runs</th>
+        <th data-col="4" onclick="sortTable(4, 'num')">Avg Time</th>
+        <th data-col="5" onclick="sortTable(5, 'num')">p95 Time</th>
+        <th data-col="6" onclick="sortTable(6, 'str')">SAO</th>
+        <th data-col="7" onclick="sortTable(7, 'num')">Total Models</th>
+        <th data-col="8" onclick="sortTable(8, 'num')">Shared</th>
+        <th data-col="9" onclick="sortTable(9, 'num')">Unique</th>
+        <th data-col="10" onclick="sortTable(10, 'num')">Redundancy %</th>
+        <th data-col="11" onclick="sortTable(11, 'str')">Top Overlap 1</th>
+        <th data-col="12" onclick="sortTable(12, 'str')">Top Overlap 2</th>
+        <th data-col="13" onclick="sortTable(13, 'str')">Top Overlap 3</th>
+        <th data-col="14" onclick="sortTable(14, 'str')">Execute Steps</th>
+        <th data-col="15" onclick="sortTable(15, 'str')">Unique Logic</th>
       </tr>
     </thead>
     <tbody>
       {% for j in jobs %}
-      <tr class="job-row{% if j.is_candidate %} candidate-row{% endif %}"
+      <tr class="job-row"
           data-name="{{ j.name | lower }}"
           data-idx="{{ loop.index0 }}"
           onclick="toggleDetail({{ loop.index0 }})">
         <td>
           <span style="font-weight: 500;">{{ j.name }}</span>
-          {% if j.is_candidate %}<span class="badge badge-candidate">CANDIDATE</span>{% endif %}
         </td>
         <td><span style="font-size: 0.72rem;">{{ j.cadence }}</span></td>
-        <td class="num" data-val="{{ j.runs_per_day }}">{{ j.runs_per_day }}</td>
+        <td class="num" data-val="{{ j.max_daily_runs or 0 }}">
+          {% if (j.max_daily_runs or 0) >= 4 %}
+            <span style="color: var(--orange);">{{ j.max_daily_runs }}</span>
+          {% else %}
+            {{ j.max_daily_runs or 0 }}
+          {% endif %}
+        </td>
+        <td class="num" data-val="{{ j.total_runs or 0 }}">{{ j.total_runs or 0 }}</td>
+        <td class="num" data-val="{{ j.avg_duration or 0 }}">{{ j.avg_duration | duration }}</td>
+        <td class="num" data-val="{{ j.p95_duration or 0 }}">{{ j.p95_duration | duration }}</td>
         <td>
           {% if j.sao_enabled %}
             <span class="badge badge-on">On</span>
@@ -315,14 +319,16 @@
             {{ j.redundancy_pct }}%
           {% endif %}
         </td>
+        {% for i in range(3) %}
         <td>
-          {% if j.overlaps and j.overlaps | length > 0 %}
-            <span style="font-size: 0.75rem;">{{ j.overlaps[0].job_name }}</span>
-            <span class="muted" style="font-size: 0.7rem;">({{ j.overlaps[0].shared_count }} models, {{ j.overlaps[0].shared_pct }}%)</span>
+          {% if j.overlaps and j.overlaps | length > i %}
+            <span style="font-size: 0.75rem;">{{ j.overlaps[i].job_name }}</span>
+            <span class="muted" style="font-size: 0.7rem;">({{ j.overlaps[i].shared_count }}, {{ j.overlaps[i].shared_pct }}%)</span>
           {% else %}
             <span class="muted">--</span>
           {% endif %}
         </td>
+        {% endfor %}
         <td>
           {% if j.execute_steps %}
             <span class="mono">{{ j.execute_steps | join('<br>') | safe }}</span>
@@ -339,7 +345,7 @@
         </td>
       </tr>
       <tr class="detail-row" id="detail-{{ loop.index0 }}" style="display: none;">
-        <td colspan="11">
+        <td colspan="16">
           <div class="detail-content">
             <h4>Overlap Details for {{ j.name }}</h4>
             {% if j.overlaps and j.overlaps | length > 0 %}

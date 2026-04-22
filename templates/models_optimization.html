@@ -139,8 +139,6 @@
     .yes-green { color: var(--green); font-weight: 600; }
     .no-red { color: var(--red); }
     .no-muted { color: var(--text-muted); }
-    .qualification-text { font-size: 0.7rem; color: var(--text-muted); max-width: 220px; white-space: normal; line-height: 1.3; }
-    .filepath-text { font-size: 0.7rem; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
     .empty-state {
       text-align: center;
       padding: 3rem 2rem;
@@ -288,9 +286,27 @@
   <div class="controls">
     <input type="text" id="search" placeholder="Filter by model name..." oninput="filterTable()">
 
+    <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Hide:</span>
     <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="hideWindowFns" checked onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
-      Hide window function models
+      <input type="checkbox" id="filterWinFn" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Window Fns
+    </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+      <input type="checkbox" id="filterGroupBy" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      GROUP BY
+    </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+      <input type="checkbox" id="filterMacros" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Macros
+    </label>
+    <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Require:</span>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+      <input type="checkbox" id="filterPK" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Primary Key
+    </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+      <input type="checkbox" id="filterDate" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Date / Timeseries
     </label>
 
     <div class="multi-select" id="colToggleWrap">
@@ -309,42 +325,38 @@
     <thead>
       <tr>
         <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
-        <th data-col="1" onclick="sortTable(1, 'str')">Qualification</th>
-        <th data-col="2" onclick="sortTable(2, 'str')">Layer</th>
-        <th data-col="3" onclick="sortTable(3, 'str')">Folder 1</th>
-        <th data-col="4" onclick="sortTable(4, 'str')">Folder 2</th>
-        <th data-col="5" onclick="sortTable(5, 'str')">Folder 3</th>
-        <th data-col="6" onclick="sortTable(6, 'num')">Rows</th>
-        <th data-col="7" onclick="sortTable(7, 'num')">Avg Time</th>
-        <th data-col="8" onclick="sortTable(8, 'num')">Avg Cost</th>
-        <th data-col="9" onclick="sortTable(9, 'num')">Avg New Rows</th>
-        <th data-col="10" onclick="sortTable(10, 'str')">PK Test</th>
-        <th data-col="11" onclick="sortTable(11, 'str')">PK Values</th>
-        <th data-col="12" onclick="sortTable(12, 'str')">Likely PK</th>
-        <th data-col="13" onclick="sortTable(13, 'str')">Has Date</th>
+        <th data-col="1" onclick="sortTable(1, 'str')">Layer</th>
+        <th data-col="2" onclick="sortTable(2, 'str')">Folder 1</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">Folder 2</th>
+        <th data-col="4" onclick="sortTable(4, 'str')">Folder 3</th>
+        <th data-col="5" onclick="sortTable(5, 'num')">Rows</th>
+        <th data-col="6" onclick="sortTable(6, 'num')">Avg New Rows</th>
+        <th data-col="7" onclick="sortTable(7, 'num')">% New Rows</th>
+        <th data-col="8" onclick="sortTable(8, 'num')">Runs</th>
+        <th data-col="9" onclick="sortTable(9, 'num')">Avg Time</th>
+        <th data-col="10" onclick="sortTable(10, 'num')">p95 Time</th>
+        <th data-col="11" onclick="sortTable(11, 'num')">Avg Cost</th>
+        <th data-col="12" onclick="sortTable(12, 'str')">Primary Key</th>
+        <th data-col="13" onclick="sortTable(13, 'str')">Date / Timeseries</th>
         <th data-col="14" onclick="sortTable(14, 'num')">Window Fns</th>
-        <th data-col="15" onclick="sortTable(15, 'num')">Lines</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">Joins</th>
-        <th data-col="17" onclick="sortTable(17, 'num')">CTEs</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Subqueries</th>
-        <th data-col="19" onclick="sortTable(19, 'num')">CASE</th>
-        <th data-col="20" onclick="sortTable(20, 'num')">GROUP BY</th>
-        <th data-col="21" onclick="sortTable(21, 'num')">UNIONs</th>
-        <th data-col="22" onclick="sortTable(22, 'num')">Refs</th>
-        <th data-col="23" onclick="sortTable(23, 'num')">Sources</th>
-        <th data-col="24" onclick="sortTable(24, 'num')">Jinja</th>
-        <th data-col="25" onclick="sortTable(25, 'str')">Description</th>
-        <th data-col="26" onclick="sortTable(26, 'str')">File Path</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">GROUP BY</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">UNIONs</th>
+        <th data-col="17" onclick="sortTable(17, 'str')">Macros</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Downstream</th>
       </tr>
     </thead>
     <tbody>
       {% for m in models %}
-      <tr data-name="{{ m.name | lower }}" data-has-winfn="{{ '1' if m.has_window_function else '0' }}">
+      <tr data-name="{{ m.name | lower }}"
+          data-winfn="{{ m.window_fns or 0 }}"
+          data-groupby="{{ m.group_bys or 0 }}"
+          data-pk="{{ '1' if m.primary_key_cols else '0' }}"
+          data-date="{{ '1' if m.has_date_column else '0' }}"
+          data-macros="{{ '1' if m.has_custom_macros else '0' }}">
         <td>
           <div class="model-name">{{ m.name }}</div>
           <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
         </td>
-        <td><div class="qualification-text">{{ m.qualification or '--' }}</div></td>
         <td>{{ m.layer or '' }}</td>
         <td>{{ m.folder1 or '' }}</td>
         <td>{{ m.folder2 or '' }}</td>
@@ -352,34 +364,31 @@
         <td class="num" data-val="{{ m.latest_rows or 0 }}">
           {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
+        <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
+          {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.new_rows_pct or 0 }}">
+          {% if m.new_rows_pct is not none %}{{ "%.1f" | format(m.new_rows_pct) }}%{% else %}<span class="muted">--</span>{% endif %}
+        </td>
+        <td class="num" data-val="{{ m.total_runs or 0 }}">{{ m.total_runs or 0 }}</td>
         <td class="num" data-val="{{ m.avg_execution_time or 0 }}">
           {{ m.avg_execution_time | duration }}
+        </td>
+        <td class="num" data-val="{{ m.p95_execution_time or 0 }}">
+          {{ m.p95_execution_time | duration }}
         </td>
         <td class="num" data-val="{{ m.avg_cost or 0 }}">
           {% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
-        <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
-          {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
-        </td>
-        <td>{% if m.pk_test %}<span class="yes-green" title="{{ m.pk_test_cols | join(', ') }}">Yes ({{ m.pk_test_cols | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td>{% if m.pk_values %}<span class="yes-green" title="{{ m.pk_value_col_names | join(', ') }}">Yes ({{ m.pk_value_col_names | join(', ') }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
-        <td>{% if m.likely_pass_pk %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td>{% if m.primary_key_cols %}<span style="color:{% if m.pk_verified %}var(--green){% else %}var(--blue){% endif %};font-weight:500;" title="{{ m.primary_key_cols | join(', ') }}{% if m.pk_verified %} (tests passing){% endif %}">{{ m.primary_key_cols | join(', ') }}</span>{% else %}<span class="no-muted">--</span>{% endif %}</td>
         <td>{% if m.has_date_column %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
         <td class="num" data-val="{{ m.window_fns or 0 }}">
           {% if m.has_window_function %}<span style="color: var(--orange);">{{ m.window_fns or 1 }}</span>{% else %}0{% endif %}
         </td>
-        <td class="num" data-val="{{ m.lines or 0 }}">{% if m.lines %}{{ m.lines }}{% else %}<span class="muted">--</span>{% endif %}</td>
-        <td class="num" data-val="{{ m.joins or 0 }}">{{ m.joins or '0' }}</td>
-        <td class="num" data-val="{{ m.ctes or 0 }}">{{ m.ctes or '0' }}</td>
-        <td class="num" data-val="{{ m.subqueries or 0 }}">{{ m.subqueries or '0' }}</td>
-        <td class="num" data-val="{{ m.case_stmts or 0 }}">{{ m.case_stmts or '0' }}</td>
         <td class="num" data-val="{{ m.group_bys or 0 }}">{{ m.group_bys or '0' }}</td>
         <td class="num" data-val="{{ m.unions or 0 }}">{{ m.unions or '0' }}</td>
-        <td class="num" data-val="{{ m.refs or 0 }}">{{ m.refs or '0' }}</td>
-        <td class="num" data-val="{{ m.sources or 0 }}">{{ m.sources or '0' }}</td>
-        <td class="num" data-val="{{ m.jinja_blocks or 0 }}">{{ m.jinja_blocks or '0' }}</td>
-        <td>{% if m.has_description %}<span class="yes-green">Yes</span>{% else %}<span class="no-red">No</span>{% endif %}</td>
-        <td><div class="filepath-text" title="{{ m.file_path }}">{{ m.file_path or '' }}</div></td>
+        <td>{% if m.has_custom_macros %}<span class="yes-green" title="{{ m.custom_macros | join(', ') }}">Yes ({{ m.custom_macros | length }})</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
+        <td class="num" data-val="{{ m.downstream_table_count or 0 }}">{{ m.downstream_table_count or 0 }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -467,14 +476,22 @@
     }
 
     /* --- Filter Table --- */
+    /* When a checkbox is checked, rows that HAVE that attribute are hidden. */
     function filterTable() {
       const search = document.getElementById('search').value.toLowerCase();
-      const hideWinFn = document.getElementById('hideWindowFns').checked;
+      const fWinFn = document.getElementById('filterWinFn').checked;
+      const fGroupBy = document.getElementById('filterGroupBy').checked;
+      const fPK = document.getElementById('filterPK').checked;
+      const fDate = document.getElementById('filterDate').checked;
+      const fMacros = document.getElementById('filterMacros').checked;
       document.querySelectorAll('#optTable tbody tr').forEach(row => {
         const name = row.dataset.name || '';
-        const hasWinFn = row.dataset.hasWinfn === '1';
         let show = !search || name.includes(search);
-        if (show && hideWinFn && hasWinFn) show = false;
+        if (show && fWinFn && parseInt(row.dataset.winfn) > 0) show = false;
+        if (show && fGroupBy && parseInt(row.dataset.groupby) > 0) show = false;
+        if (show && fPK && row.dataset.pk !== '1') show = false;
+        if (show && fDate && row.dataset.date !== '1') show = false;
+        if (show && fMacros && row.dataset.macros === '1') show = false;
         row.style.display = show ? '' : 'none';
       });
     }
@@ -539,6 +556,7 @@
     }
     document.querySelectorAll('table').forEach(t => initResize(t));
     initColumnToggle();
+    filterTable();
 
     function exportCSV() {
       const table = document.getElementById('optTable');

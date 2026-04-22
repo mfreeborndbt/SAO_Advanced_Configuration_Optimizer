@@ -294,8 +294,7 @@
         <th data-col="16" onclick="sortTable(16, 'num')">Upstream Cost</th>
         <th data-col="17" onclick="sortTable(17, 'num')">Runs</th>
         <th data-col="18" onclick="sortTable(18, 'num')">Avg New Rows</th>
-        <th data-col="19" onclick="sortTable(19, 'num')">Change %</th>
-        <th data-col="20" onclick="sortTable(20, 'num')">Rows</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">Rows</th>
       </tr>
     </thead>
     <tbody>
@@ -350,9 +349,6 @@
         <td class="num" data-val="{{ m.total_runs or 0 }}">{{ m.total_runs or 0 }}</td>
         <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
           {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
-        </td>
-        <td class="num" data-val="{{ m.change_pct or 0 }}">
-          {% if m.change_pct is not none %}{{ "%.0f"|format(m.change_pct) }}%{% else %}<span class="muted">--</span>{% endif %}
         </td>
         <td class="num" data-val="{{ m.latest_rows or 0 }}">
           {% if m.latest_rows is not none %}{{ "{:,}".format(m.latest_rows) }}{% else %}<span class="muted">--</span>{% endif %}
