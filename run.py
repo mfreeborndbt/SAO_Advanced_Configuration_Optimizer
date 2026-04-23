@@ -21,6 +21,8 @@ MIN_PYTHON = (3, 8)
 DEFAULT_PORT = 5555
 VENV_DIR = ".venv"
 REQUIREMENTS = "requirements.txt"
+REPO_REMOTE = "origin"
+REPO_BRANCH = "main"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -70,6 +72,59 @@ def install_deps(py):
     )
 
 
+def get_local_commit():
+    """Return the short commit hash of the current HEAD, or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        return result.stdout.strip() if result.returncode == 0 else "unknown"
+    except FileNotFoundError:
+        return "unknown"
+
+
+def check_for_updates():
+    """Fetch from remote and warn if local is behind. Never fails fatally."""
+    try:
+        # Check if we're in a git repo
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        if result.returncode != 0:
+            return
+
+        # Fetch latest from remote (timeout after 10s to avoid hanging)
+        subprocess.run(
+            ["git", "fetch", REPO_REMOTE, REPO_BRANCH, "--quiet"],
+            capture_output=True, text=True, cwd=ROOT, timeout=10,
+        )
+
+        # Compare local HEAD with remote
+        local = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, cwd=ROOT,
+        ).stdout.strip()
+        remote = subprocess.run(
+            ["git", "rev-parse", f"{REPO_REMOTE}/{REPO_BRANCH}"],
+            capture_output=True, text=True, cwd=ROOT,
+        ).stdout.strip()
+
+        if local != remote:
+            behind = subprocess.run(
+                ["git", "rev-list", "--count", f"HEAD..{REPO_REMOTE}/{REPO_BRANCH}"],
+                capture_output=True, text=True, cwd=ROOT,
+            ).stdout.strip()
+            print(f"\n  *** Update available! You are {behind} commit(s) behind {REPO_REMOTE}/{REPO_BRANCH}. ***")
+            print(f"  *** Run 'git pull {REPO_REMOTE} {REPO_BRANCH}' to update. ***\n")
+        else:
+            print("  Up to date.")
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        # Network issues, no git, etc. — silently continue
+        print(f"  (Could not check for updates: {e})")
+
+
 def open_browser(port):
     """Open the browser after a short delay to let the server start."""
     time.sleep(2)
@@ -80,9 +135,13 @@ def main():
     os.chdir(ROOT)
     check_python_version()
 
-    # Parse --port argument
+    # Parse arguments
     port = DEFAULT_PORT
+    skip_update_check = False
     args = sys.argv[1:]
+    if "--no-update" in args:
+        skip_update_check = True
+        args.remove("--no-update")
     if "--port" in args:
         idx = args.index("--port")
         if idx + 1 < len(args):
@@ -94,12 +153,17 @@ def main():
     py = ensure_venv()
     install_deps(py)
 
+    commit = get_local_commit()
     url = f"http://localhost:{port}"
     print()
     print("  SAO Advanced Configuration Optimizer")
+    print(f"  Version: {commit}")
     print("  ------------------------------------")
+    if not skip_update_check:
+        check_for_updates()
     print(f"  Running at: {url}")
     print("  Stop with:  Ctrl+C")
+    print("  (Use --no-update to skip update check)")
     print()
 
     # Open browser in background thread
