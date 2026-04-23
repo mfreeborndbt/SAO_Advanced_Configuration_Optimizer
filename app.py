@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 from flask import Flask, render_template, request, redirect, url_for, flash, Response
@@ -19,6 +20,27 @@ from warehouse_config import (
 
 app = Flask(__name__)
 app.secret_key = "dbt-observability-setup-key"
+
+
+def _get_git_version():
+    """Return the short git commit hash, or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        return result.stdout.strip() if result.returncode == 0 else "unknown"
+    except FileNotFoundError:
+        return "unknown"
+
+
+_APP_VERSION = _get_git_version()
+
+
+@app.context_processor
+def inject_version():
+    return dict(app_version=_APP_VERSION)
 
 
 # ---------------------------------------------------------------------------
