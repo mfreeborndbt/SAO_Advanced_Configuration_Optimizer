@@ -280,6 +280,7 @@ def _fetch_single_run_models(client, job_id, run_id):
           materializedType
           status
           executeCompletedAt
+          rowsAffected
           stats { id value }
         }
       }
@@ -549,9 +550,16 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
             })
 
             stats = {s["id"]: s["value"] for s in (m.get("stats") or [])}
-            row_count = stats.get("row_count")
+            # Fusion uses "row_count" stat; Core may use "rows_affected" stat
+            # or the top-level "rowsAffected" field
+            row_count = stats.get("row_count") or stats.get("rows_affected") or stats.get("num_rows")
+            if row_count is None and m.get("rowsAffected") is not None:
+                row_count = m["rowsAffected"]
             if row_count is not None:
-                entry["row_counts_by_run"].append((run["created_at"], int(row_count)))
+                try:
+                    entry["row_counts_by_run"].append((run["created_at"], int(row_count)))
+                except (ValueError, TypeError):
+                    pass
 
     print(f"[{client.name}] Processed {len(runs)} runs, found {len(model_history)} table/incremental models with successful builds")
 
