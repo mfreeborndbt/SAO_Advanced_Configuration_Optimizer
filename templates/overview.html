@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project_name }} / Overview</title>
+  <title>{{ project_name }} / Project Dictionary</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%236c63ff%22/><text y=%2272%22 x=%2250%22 text-anchor=%22middle%22 font-size=%2258%22 font-family=%22system-ui%22 font-weight=%22700%22 fill=%22white%22>S</text></svg>">
   <style>
     :root {
@@ -35,6 +35,7 @@
     .tab:hover { color: var(--text); text-decoration: none; }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
     .tab-spacer { flex: 1; }
+    .tab-sep { width: 1px; height: 1.1rem; background: var(--border); margin: 0 0.25rem; align-self: center; }
     .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
     .tab-link:hover { color: var(--accent); text-decoration: none; }
 
@@ -88,9 +89,10 @@
 </head>
 <body>
   <nav class="tab-nav">
-    <a href="/overview" class="tab active">Overview</a>
-    <a href="/" class="tab">Full Model Context</a>
+    <a href="/overview" class="tab active">Project Dictionary</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
+    <span class="tab-sep"></span>
+    <a href="/" class="tab">Full Model Context</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
     <a href="/updated-at" class="tab">Updated At</a>
@@ -101,7 +103,7 @@
   </nav>
 
   <header>
-    <h1><span>{{ project_name }}</span> / Overview</h1>
+    <h1><span>{{ project_name }}</span> / Project Dictionary</h1>
     <p class="subtitle">A quick guide to each tab and what to expect</p>
   </header>
 

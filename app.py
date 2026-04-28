@@ -221,7 +221,7 @@ def loading():
     # Map page paths to display names
     page_names = {
         "/": "Full Model Context",
-        "/overview": "Overview",
+        "/overview": "Project Dictionary",
         "/models-optimization": "Models Optimization",
         "/jobs-optimization": "Jobs Optimization",
         "/updated-at": "Updated At",
