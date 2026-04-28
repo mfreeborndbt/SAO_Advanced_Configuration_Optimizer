@@ -35,6 +35,7 @@
     .tab:hover { color: var(--text); text-decoration: none; }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
     .tab-spacer { flex: 1; }
+    .tab-sep { width: 1px; height: 1.1rem; background: var(--border); margin: 0 0.25rem; align-self: center; }
     .tab-link { padding: 0.6rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; }
     .tab-link:hover { color: var(--accent); text-decoration: none; }
 
@@ -138,9 +139,10 @@
 </head>
 <body>
   <nav class="tab-nav">
-    <a href="/overview" class="tab">Overview</a>
-    <a href="/" class="tab">Full Model Context</a>
+    <a href="/overview" class="tab">Project Dictionary</a>
     <a href="/data-dictionary" class="tab active">Data Dictionary</a>
+    <span class="tab-sep"></span>
+    <a href="/" class="tab">Full Model Context</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
     <a href="/jobs-optimization" class="tab">Jobs Optimization</a>
     <a href="/updated-at" class="tab">Updated At</a>
