@@ -138,6 +138,7 @@
 </head>
 <body>
   <nav class="tab-nav">
+    <a href="/overview" class="tab">Overview</a>
     <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab active">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
@@ -181,7 +182,7 @@
             <tr><td>Model</td><td>The name of a dbt model materialized as a table or incremental table in your data warehouse</td></tr>
             <tr><td>Schema</td><td>The database and schema where the model is materialized</td></tr>
             <tr><td>Layer</td><td>First-level folder classification from the dbt project FQN (e.g., staging, intermediate, marts)</td></tr>
-            <tr><td>Folder 1 / 2 / 3</td><td>Directory hierarchy under the models/ directory in the dbt project</td></tr>
+            <tr><td>Root Folder / Subfolder 1 / Subfolder 2</td><td>Directory hierarchy under the models/ directory in the dbt project</td></tr>
             <tr><td>Type</td><td>Materialization strategy: &ldquo;table&rdquo; (full rebuild each run) or &ldquo;incremental&rdquo; (appends/merges new data)</td></tr>
             <tr><td>Language</td><td>The model&rsquo;s language: SQL or Python</td></tr>
             <tr><td>Tags</td><td>dbt tags assigned to the model via config or YAML</td></tr>
@@ -474,6 +475,7 @@
   <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
     <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
   </div>
+  <button id="loadCancelBtn" onclick="window.history.back()" style="display:none;margin-top:1.25rem;background:transparent;border:1px solid #2a2d3a;border-radius:6px;padding:0.45rem 1.1rem;color:#8b8fa3;font-size:0.8rem;cursor:pointer;font-family:inherit;">Cancel</button>
 </div>
 <style>
 @keyframes loadSlide {
@@ -492,10 +494,12 @@ document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(functio
     if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
     if (sub) sub.style.display = 'none';
     if (overlay) overlay.style.display = 'flex';
+    var cancelBtn = document.getElementById('loadCancelBtn');
     var start = Date.now();
     window._elapsedTimer = setInterval(function() {
       var elapsed = Math.floor((Date.now() - start) / 1000);
       if (elapsed >= 3 && sub) sub.style.display = '';
+      if (elapsed >= 3 && cancelBtn) cancelBtn.style.display = '';
       var el = document.getElementById('loadElapsed');
       if (el) el.textContent = elapsed + 's';
     }, 1000);

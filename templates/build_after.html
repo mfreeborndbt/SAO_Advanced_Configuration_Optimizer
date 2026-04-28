@@ -213,6 +213,7 @@
 </head>
 <body>
   <nav class="tab-nav">
+    <a href="/overview" class="tab">Overview</a>
     <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
@@ -275,9 +276,9 @@
         <th data-col="0" onclick="sortTable(0, 'str')">Model</th>
         <th data-col="1" onclick="sortTable(1, 'str')">Type</th>
         <th data-col="2" onclick="sortTable(2, 'str')">Layer</th>
-        <th data-col="3" onclick="sortTable(3, 'str')">Folder 1</th>
-        <th data-col="4" onclick="sortTable(4, 'str')">Folder 2</th>
-        <th data-col="5" onclick="sortTable(5, 'str')">Folder 3</th>
+        <th data-col="3" onclick="sortTable(3, 'str')">Root Folder</th>
+        <th data-col="4" onclick="sortTable(4, 'str')">Subfolder 1</th>
+        <th data-col="5" onclick="sortTable(5, 'str')">Subfolder 2</th>
         <th data-col="6" onclick="sortTable(6, 'str')">Tags</th>
         <th data-col="7" onclick="sortTable(7, 'str')">build_after</th>
         <th data-col="8" onclick="sortTable(8, 'num')">Avg Cost</th>
@@ -520,6 +521,7 @@
   <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
     <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
   </div>
+  <button id="loadCancelBtn" onclick="window.history.back()" style="display:none;margin-top:1.25rem;background:transparent;border:1px solid #2a2d3a;border-radius:6px;padding:0.45rem 1.1rem;color:#8b8fa3;font-size:0.8rem;cursor:pointer;font-family:inherit;">Cancel</button>
 </div>
 <style>
 @keyframes loadSlide {
@@ -538,10 +540,12 @@ document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link').forEach(functio
     if (lt) lt.textContent = 'Loading ' + this.textContent.trim() + '...';
     if (sub) sub.style.display = 'none';
     if (overlay) overlay.style.display = 'flex';
+    var cancelBtn = document.getElementById('loadCancelBtn');
     var start = Date.now();
     window._elapsedTimer = setInterval(function() {
       var elapsed = Math.floor((Date.now() - start) / 1000);
       if (elapsed >= 3 && sub) sub.style.display = '';
+      if (elapsed >= 3 && cancelBtn) cancelBtn.style.display = '';
       var el = document.getElementById('loadElapsed');
       if (el) el.textContent = elapsed + 's';
     }, 1000);

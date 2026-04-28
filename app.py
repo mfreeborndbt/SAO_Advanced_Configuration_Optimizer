@@ -221,6 +221,7 @@ def loading():
     # Map page paths to display names
     page_names = {
         "/": "Full Model Context",
+        "/overview": "Overview",
         "/models-optimization": "Models Optimization",
         "/jobs-optimization": "Jobs Optimization",
         "/updated-at": "Updated At",
@@ -271,6 +272,15 @@ def api_load():
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/overview")
+def overview():
+    creds = load_credentials()
+    if creds is None:
+        return redirect(url_for("setup"))
+    project_name = creds.get("name", "Project")
+    return render_template("overview.html", project_name=project_name, active_tab="overview")
 
 
 @app.route("/")
@@ -670,7 +680,7 @@ def save_warehouses():
             mapping[wh_name] = value
     base_cost = float(request.form.get("base_cost", DEFAULT_BASE_COST))
     save_warehouse_config(env_key, mapping, base_cost)
-    return redirect(url_for("index"))
+    return redirect(url_for("overview"))
 
 
 if __name__ == "__main__":
