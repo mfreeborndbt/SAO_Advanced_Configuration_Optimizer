@@ -260,7 +260,7 @@
 
   <header>
     <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Models Optimization</span></h1>
-    <div class="subtitle">Table models in the top 20% by average run time that may benefit from incremental materialization — filtered from {{ all_model_count }} total models</div>
+    <div class="subtitle">Table models that may benefit from incremental materialization — {{ models | length }} of {{ all_model_count }} total models</div>
   </header>
 
   <div class="summary">
