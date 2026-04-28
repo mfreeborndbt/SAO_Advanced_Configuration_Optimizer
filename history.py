@@ -7,46 +7,61 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict, Counter
 from discovery_client import DbtClient
+from cache_db import cache_get as db_get, cache_set as db_set, cache_exists as db_exists
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
-CACHE_TTL = 600  # 10 minutes
+# TTLs — generous so data survives restarts
+_AGG_TTL = 6 * 3600       # 6 hours for aggregate results
+_API_TTL = 6 * 3600       # 6 hours for individual API responses
 
 # ---------------------------------------------------------------------------
-# In-memory aggregate cache — avoids re-fetching ALL data on every tab load.
-# Key: (account_id, project_id, environment_id)
-# Value: (timestamp, result_dict)
+# In-memory aggregate cache (fast path) backed by DuckDB (persistence).
 # ---------------------------------------------------------------------------
 _AGGREGATE_CACHE = {}
 _AGGREGATE_CACHE_LOCK = threading.Lock()
-_AGGREGATE_CACHE_TTL = 600  # 10 minutes
 
 
-def _agg_cache_key(client):
-    return (str(client.account_id), str(client.project_id), str(client.environment_id))
+def _agg_db_key(client):
+    return f"agg:{client.account_id}:{client.project_id}:{client.environment_id}"
 
 
 def _agg_cache_get(client):
-    key = _agg_cache_key(client)
+    key = _agg_db_key(client)
+    # Fast path: in-memory
     with _AGGREGATE_CACHE_LOCK:
         entry = _AGGREGATE_CACHE.get(key)
-        if entry and (time.time() - entry[0]) < _AGGREGATE_CACHE_TTL:
+        if entry and (time.time() - entry[0]) < _AGG_TTL:
             return entry[1]
+    # Slow path: DuckDB
+    data = db_get(key, ttl=_AGG_TTL)
+    if data is not None:
+        # Restore set type for high_cost_ids
+        if "high_cost_ids" in data and isinstance(data["high_cost_ids"], list):
+            data["high_cost_ids"] = set(data["high_cost_ids"])
+        with _AGGREGATE_CACHE_LOCK:
+            _AGGREGATE_CACHE[key] = (time.time(), data)
+        return data
     return None
 
 
 def _agg_cache_set(client, data):
-    key = _agg_cache_key(client)
+    key = _agg_db_key(client)
     with _AGGREGATE_CACHE_LOCK:
         _AGGREGATE_CACHE[key] = (time.time(), data)
+    db_set(key, data)
 
 
 def is_aggregate_cached(client):
-    """Check if aggregate data is available in memory cache."""
-    return _agg_cache_get(client) is not None
+    """Check if aggregate data is available (memory or DuckDB)."""
+    key = _agg_db_key(client)
+    with _AGGREGATE_CACHE_LOCK:
+        entry = _AGGREGATE_CACHE.get(key)
+        if entry and (time.time() - entry[0]) < _AGG_TTL:
+            return True
+    return db_exists(key, ttl=_AGG_TTL)
 
 
 # ---------------------------------------------------------------------------
-# Disk cache for individual API responses
+# DuckDB cache for individual API responses
 # ---------------------------------------------------------------------------
 
 
@@ -56,21 +71,11 @@ def _cache_key(prefix, *args):
 
 
 def _cache_get(key):
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, f"{key}.json")
-    if os.path.exists(path):
-        age = time.time() - os.path.getmtime(path)
-        if age < CACHE_TTL:
-            with open(path) as f:
-                return json.load(f)
-    return None
+    return db_get(f"api:{key}", ttl=_API_TTL)
 
 
 def _cache_set(key, data):
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    path = os.path.join(CACHE_DIR, f"{key}.json")
-    with open(path, "w") as f:
-        json.dump(data, f)
+    db_set(f"api:{key}", data)
 
 
 # ---------------------------------------------------------------------------

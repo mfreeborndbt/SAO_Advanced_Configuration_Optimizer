@@ -534,8 +534,11 @@ def setup_save():
 @app.route("/setup/clear")
 def setup_clear():
     from discovery_client import CREDENTIALS_PATH
+    import cache_db
     if os.path.exists(CREDENTIALS_PATH):
         os.remove(CREDENTIALS_PATH)
+    # Close DuckDB connection before removing its file
+    cache_db.close()
     cache_dir = os.path.join(os.path.dirname(__file__), ".cache")
     if os.path.exists(cache_dir):
         import shutil
