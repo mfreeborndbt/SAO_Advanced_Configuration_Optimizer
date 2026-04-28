@@ -291,9 +291,9 @@
         </div>
 
         <div class="form-group">
-          <label>Service Token</label>
+          <label>Personal Access Token</label>
           <input type="password" name="token" value="" placeholder="{{ '••••••••••••••••' if creds else '' }}">
-          <div class="hint">{% if creds %}Leave blank to keep current token. Enter a new value to update.{% else %}A service token with read + metadata access.{% endif %}</div>
+          <div class="hint">{% if creds %}Leave blank to keep current token. Enter a new value to update.{% else %}A personal access token (API key). Go to Account Settings &rarr; API tokens &rarr; Personal tokens to generate one.{% endif %}</div>
         </div>
 
         <div class="actions">
