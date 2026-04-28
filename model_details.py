@@ -292,8 +292,8 @@ def fetch_model_details(client: DbtClient, max_models=500):
             for col in pk_columns_from_tests
         }
 
-        # pk_values: column name contains standalone "id" (not "lid", "idle", etc.)
-        pk_value_cols = [cn for cn in column_names if re.search(r'(^|_)id(_|$)', cn)]
+        # pk_values: column name contains standalone "id" or "key" or "sk" (not "lid", "idle", etc.)
+        pk_value_cols = [cn for cn in column_names if re.search(r'(^|_)(id|key|sk|pk)(_|$)', cn)]
 
         has_potential_pk = bool(unique_key) or contract_enforced or bool(pk_columns_from_tests) or bool(pk_value_cols)
         strategy = config.get("incremental_strategy")

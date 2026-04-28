@@ -747,11 +747,29 @@ def build_aggregate(client: DbtClient, days=7, max_models=500):
 
     # Build per-job run stats (execution times, daily counts) for jobs optimization
     job_run_stats = defaultdict(lambda: {"durations": [], "daily_counts": Counter()})
+
+    def _parse_hms(val):
+        """Parse 'HH:MM:SS' string to seconds."""
+        parts = str(val).split(":")
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        return None
+
     for run in runs:
         jid = run["job_definition_id"]
-        dur = run.get("duration_in_sec")
-        if dur is not None:
-            job_run_stats[jid]["durations"].append(float(dur))
+        secs = None
+        # run_duration and duration are both HH:MM:SS strings in dbt Cloud Admin API
+        for field in ("run_duration", "duration"):
+            raw = run.get(field)
+            if raw and ":" in str(raw):
+                try:
+                    secs = _parse_hms(raw)
+                except (ValueError, IndexError):
+                    pass
+            if secs is not None:
+                break
+        if secs is not None:
+            job_run_stats[jid]["durations"].append(float(secs))
         day = run.get("created_at", "")[:10]
         if day:
             job_run_stats[jid]["daily_counts"][day] += 1
