@@ -248,6 +248,15 @@
       {% endfor %}
     {% endwith %}
 
+    <div class="form-card" style="margin-bottom:1.25rem;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Quick Setup &mdash; Paste Environment URL</label>
+        <input type="text" id="quickUrl" placeholder="https://abc123.us1.dbt.com/deploy/123/projects/456/environments/789">
+        <div class="hint">Go to your dbt Cloud project &rarr; Orchestration &rarr; Environments &rarr; click your Production environment &rarr; copy the URL from your browser.</div>
+        <div id="quickMsg" style="display:none;font-size:0.78rem;margin-top:0.4rem;"></div>
+      </div>
+    </div>
+
     <div class="form-card">
       <form action="/setup/save" method="POST">
         <div class="form-row">
@@ -330,6 +339,29 @@ function showOverlayDelayed(msg) {
     if (el) el.textContent = elapsed + 's';
   }, 1000);
 }
+
+/* Quick URL parser */
+document.getElementById('quickUrl').addEventListener('input', function() {
+  var url = this.value.trim();
+  var msg = document.getElementById('quickMsg');
+  if (!url) { msg.style.display = 'none'; return; }
+  // Pattern: https://{prefix}.{region}.dbt.com/deploy/{account_id}/projects/{project_id}/environments/{environment_id}
+  var m = url.match(/^https?:\/\/([^.]+)\.([^.]+)\.dbt\.com\/deploy\/(\d+)\/projects\/(\d+)\/environments\/(\d+)/);
+  if (!m) {
+    msg.style.display = '';
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Could not parse URL. Expected format: https://prefix.region.dbt.com/deploy/account_id/projects/project_id/environments/environment_id';
+    return;
+  }
+  document.querySelector('input[name="account_prefix"]').value = m[1];
+  document.querySelector('input[name="region"]').value = m[2];
+  document.querySelector('input[name="account_id"]').value = m[3];
+  document.querySelector('input[name="project_id"]').value = m[4];
+  document.querySelector('input[name="environment_id"]').value = m[5];
+  msg.style.display = '';
+  msg.style.color = 'var(--green)';
+  msg.textContent = 'Filled in: ' + m[1] + ' (' + m[2] + ') — account ' + m[3] + ', project ' + m[4] + ', environment ' + m[5] + '. Just add your service token below.';
+});
 
 /* Nav link click feedback */
 document.querySelectorAll('.tab-nav a.tab, .tab-nav a.tab-link, .settings-tab').forEach(function(link) {
