@@ -266,8 +266,8 @@
       Hide models with static upstream
     </label>
     <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="hideWithJoins" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
-      Hide models with joins
+      <input type="checkbox" id="showWithJoins" checked onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Show models with joins
     </label>
 
     <div class="multi-select" id="colToggleWrap">
@@ -433,7 +433,7 @@
       const maxUpEl = document.getElementById('maxUpstream');
       const maxUp = maxUpEl.value ? parseFloat(maxUpEl.value) : Infinity;
       const hideStatic = document.getElementById('hideStaticUpstream').checked;
-      const hideJoins = document.getElementById('hideWithJoins').checked;
+      const showJoins = document.getElementById('showWithJoins').checked;
       const minAvgCostEl = document.getElementById('minAvgCost');
       const minAvgCost = minAvgCostEl ? (parseFloat(minAvgCostEl.value) || 0) : 0;
       const minDownCostEl = document.getElementById('minDownCost');
@@ -453,7 +453,7 @@
         if (avgCost < minAvgCost) show = false;
         if (downCost < minDownCost) show = false;
         if (hideStatic && hasStaticUp) show = false;
-        if (hideJoins && joins > 0) show = false;
+        if (!showJoins && joins > 0) show = false;
         row.style.display = show ? '' : 'none';
       });
     }
