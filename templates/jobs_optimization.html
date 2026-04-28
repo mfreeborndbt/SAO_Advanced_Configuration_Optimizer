@@ -114,7 +114,7 @@
       text-overflow: ellipsis;
     }
     tr:hover td { background: rgba(108, 99, 255, 0.05); }
-    tr.expanded td { background: rgba(108, 99, 255, 0.08); }
+    /* tr.expanded td { background: rgba(108, 99, 255, 0.08); } */
 
     /* Sticky first column */
     th:first-child, td:first-child {
@@ -148,59 +148,6 @@
     tr.candidate-row > td:first-child {
       border-left: 3px solid var(--red);
     }
-
-    /* Clickable row */
-    .job-row { cursor: pointer; }
-
-    /* Detail / expanded row */
-    .detail-row td {
-      padding: 0;
-      background: #12141c;
-    }
-    .detail-row td:first-child {
-      background: #12141c;
-    }
-    tr:hover.detail-row td,
-    tr:hover.detail-row td:first-child {
-      background: #12141c;
-    }
-    .detail-content {
-      padding: 1rem 1.5rem;
-    }
-    .detail-content h4 {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-bottom: 0.6rem;
-    }
-    .detail-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: var(--surface);
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-    .detail-table th {
-      background: #14161e;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.6rem;
-      position: static;
-      cursor: default;
-    }
-    .detail-table td {
-      padding: 0.4rem 0.75rem;
-      font-size: 0.78rem;
-      border-top: 1px solid var(--border);
-      border-bottom: none;
-    }
-    .detail-table th:first-child,
-    .detail-table td:first-child {
-      position: static;
-      border-right: none;
-      background: inherit;
-    }
-    .detail-table tr:hover td { background: rgba(108, 99, 255, 0.05); }
 
     /* Monospace for execute steps */
     .mono {
@@ -249,6 +196,7 @@
 
   <div class="controls">
     <input type="text" id="search" placeholder="Filter jobs..." oninput="filterTable()">
+    <button onclick="exportCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.85rem;color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Export CSV</button>
   </div>
 
   <div class="table-wrap">
@@ -275,10 +223,8 @@
     </thead>
     <tbody>
       {% for j in jobs %}
-      <tr class="job-row"
-          data-name="{{ j.name | lower }}"
-          data-idx="{{ loop.index0 }}"
-          onclick="toggleDetail({{ loop.index0 }})">
+      <tr data-name="{{ j.name | lower }}"
+          data-idx="{{ loop.index0 }}">
         <td>
           <span style="font-weight: 500;">{{ j.name }}</span>
         </td>
@@ -345,53 +291,6 @@
           {% endif %}
         </td>
       </tr>
-      <tr class="detail-row" id="detail-{{ loop.index0 }}" style="display: none;">
-        <td colspan="16">
-          <div class="detail-content">
-            <h4>Overlap Details for {{ j.name }}</h4>
-            {% if j.overlaps and j.overlaps | length > 0 %}
-            <table class="detail-table">
-              <thead>
-                <tr>
-                  <th>Overlapping Job</th>
-                  <th>Shared Models</th>
-                  <th>Overlap %</th>
-                  <th>Their Cadence</th>
-                  <th>Cadence Similar?</th>
-                  <th>Less Frequent?</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for o in j.overlaps %}
-                <tr>
-                  <td style="font-weight: 500;">{{ o.job_name }}</td>
-                  <td class="num">{{ o.shared_count }}</td>
-                  <td class="num">{{ o.shared_pct }}%</td>
-                  <td><span style="font-size: 0.72rem;">{{ o.their_cadence }}</span></td>
-                  <td>
-                    {% if o.cadence_similar %}
-                      <span style="color: var(--orange);">Yes</span>
-                    {% else %}
-                      <span class="muted">No</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if o.less_frequent %}
-                      <span style="color: var(--green);">Yes</span>
-                    {% else %}
-                      <span class="muted">No</span>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-            {% else %}
-              <span class="muted" style="font-size: 0.8rem;">No overlaps detected for this job.</span>
-            {% endif %}
-          </div>
-        </td>
-      </tr>
       {% endfor %}
     </tbody>
   </table>
@@ -401,16 +300,10 @@
     /* --- Filter Table --- */
     function filterTable() {
       const search = document.getElementById('search').value.toLowerCase();
-      document.querySelectorAll('#jobsTable tbody tr.job-row').forEach(row => {
+      document.querySelectorAll('#jobsTable tbody tr').forEach(row => {
         const name = row.dataset.name;
         const show = !search || name.includes(search);
         row.style.display = show ? '' : 'none';
-        const detailId = 'detail-' + row.dataset.idx;
-        const detailEl = document.getElementById(detailId);
-        if (detailEl) {
-          detailEl.style.display = 'none';
-          row.classList.remove('expanded');
-        }
       });
     }
 
@@ -428,45 +321,46 @@
       if (th) th.classList.add(currentSort.asc ? 'sorted-asc' : 'sorted-desc');
 
       const tbody = document.querySelector('#jobsTable tbody');
-      const rowPairs = [];
-      const rows = Array.from(tbody.querySelectorAll('tr.job-row'));
+      const rows = Array.from(tbody.rows);
 
-      rows.forEach(row => {
-        const detail = document.getElementById('detail-' + row.dataset.idx);
-        rowPairs.push([row, detail]);
-      });
-
-      rowPairs.sort((a, b) => {
-        const ra = a[0], rb = b[0];
+      rows.sort((a, b) => {
         if (type === 'num') {
-          const av = parseFloat(ra.cells[col].dataset.val || ra.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
-          const bv = parseFloat(rb.cells[col].dataset.val || rb.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
+          const av = parseFloat(a.cells[col].dataset.val || a.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
+          const bv = parseFloat(b.cells[col].dataset.val || b.cells[col].textContent.replace(/[^0-9.\-]/g, '') || '0');
           return currentSort.asc ? av - bv : bv - av;
         } else {
-          const av = ra.cells[col].textContent.trim().toLowerCase();
-          const bv = rb.cells[col].textContent.trim().toLowerCase();
+          const av = a.cells[col].textContent.trim().toLowerCase();
+          const bv = b.cells[col].textContent.trim().toLowerCase();
           return currentSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
         }
       });
 
-      rowPairs.forEach(([row, detail]) => {
-        tbody.appendChild(row);
-        if (detail) tbody.appendChild(detail);
-      });
+      rows.forEach(r => tbody.appendChild(r));
     }
 
-    /* --- Expand / Collapse Detail Rows --- */
-    function toggleDetail(idx) {
-      const el = document.getElementById('detail-' + idx);
-      const row = document.querySelector('tr.job-row[data-idx="' + idx + '"]');
-      if (!el || !row) return;
-      if (el.style.display === 'none') {
-        el.style.display = '';
-        row.classList.add('expanded');
-      } else {
-        el.style.display = 'none';
-        row.classList.remove('expanded');
-      }
+    /* --- Export CSV --- */
+    function exportCSV() {
+      const table = document.getElementById('jobsTable');
+      if (!table) return;
+      const headers = [];
+      table.querySelectorAll('thead th').forEach(th => {
+        headers.push('"' + th.textContent.trim().replace(/"/g, '""') + '"');
+      });
+      const csvRows = [headers.join(',')];
+      table.querySelectorAll('tbody tr').forEach(row => {
+        if (row.style.display === 'none') return;
+        const cells = [];
+        Array.from(row.cells).forEach(td => {
+          let val = td.dataset.val !== undefined ? td.dataset.val : td.textContent.trim().replace(/\s+/g, ' ');
+          cells.push('"' + String(val).replace(/"/g, '""') + '"');
+        });
+        csvRows.push(cells.join(','));
+      });
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sao_jobs_optimization.csv';
+      a.click();
     }
 
     /* --- Column Resizer --- */

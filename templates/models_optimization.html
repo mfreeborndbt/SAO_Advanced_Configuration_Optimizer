@@ -257,7 +257,7 @@
 
   <header>
     <h1><span>&#9642;</span> {{ project_name }} <span style="color: var(--text-muted); font-weight: 400;">/ Models Optimization</span></h1>
-    <div class="subtitle">Table models that may benefit from incremental materialization — filtered from {{ all_model_count }} total models</div>
+    <div class="subtitle">Table models in the top 20% by average run time that may benefit from incremental materialization — filtered from {{ all_model_count }} total models</div>
   </header>
 
   <div class="summary">
@@ -285,30 +285,39 @@
   </div>
 
   <div class="controls">
-    <input type="text" id="search" placeholder="Filter by model name..." oninput="filterTable()">
-
-    <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Hide:</span>
-    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="filterWinFn" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+    <span style="font-size:0.72rem;color:var(--red);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Hide:</span>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--red);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterWinFn" onchange="filterTable()" style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;">
       Window Fns
     </label>
-    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="filterGroupBy" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--red);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterGroupBy" onchange="filterTable()" style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;">
       GROUP BY
     </label>
-    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="filterMacros" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--red);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterMacros" onchange="filterTable()" style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;">
       Macros
     </label>
-    <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Require:</span>
-    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="filterPK" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
-      Primary Key
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--red);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterUnions" onchange="filterTable()" style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;">
+      UNIONs
     </label>
-    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
-      <input type="checkbox" id="filterDate" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+
+    <span style="font-size:0.72rem;color:var(--green);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-left:0.5rem;">Require:</span>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--green);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterPK" onchange="filterTable()" style="accent-color:var(--green);width:14px;height:14px;cursor:pointer;">
+      Primary Key Test
+    </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--green);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterPKCandidate" onchange="filterTable()" style="accent-color:var(--green);width:14px;height:14px;cursor:pointer;">
+      PK Candidate
+    </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--green);cursor:pointer;opacity:0.85;">
+      <input type="checkbox" id="filterDate" onchange="filterTable()" style="accent-color:var(--green);width:14px;height:14px;cursor:pointer;">
       Date / Timeseries
     </label>
+    <span style="font-size:0.72rem;color:var(--text-muted);margin-left:0.25rem;">match:</span>
+    <button id="requireModeBtn" onclick="toggleRequireMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.5rem;color:var(--green);font-size:0.72rem;font-weight:600;cursor:pointer;font-family:inherit;min-width:36px;text-transform:uppercase;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">AND</button>
 
     <div class="multi-select" id="colToggleWrap">
       <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
@@ -318,6 +327,18 @@
     </div>
 
     <button onclick="exportCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.85rem;color:var(--text);font-size:0.85rem;cursor:pointer;font-family:inherit;white-space:nowrap;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Export CSV</button>
+  </div>
+
+  <div class="controls" style="margin-top:0;">
+    <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Filters:</span>
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);">
+      Min Avg Time (min)
+      <input type="number" id="filterMinTime" placeholder="minutes" min="0" step="1" style="width:100px;" oninput="filterTable()">
+    </label>
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);">
+      Min Downstream
+      <input type="number" id="filterMinDownstream" placeholder="0" min="0" step="1" style="width:80px;" oninput="filterTable()">
+    </label>
   </div>
 
   {% if models %}
@@ -337,13 +358,14 @@
         <th data-col="9" onclick="sortTable(9, 'num')">Avg Time</th>
         <th data-col="10" onclick="sortTable(10, 'num')">p95 Time</th>
         <th data-col="11" onclick="sortTable(11, 'num')">Avg Cost</th>
-        <th data-col="12" onclick="sortTable(12, 'str')">Primary Key</th>
-        <th data-col="13" onclick="sortTable(13, 'str')">Date / Timeseries</th>
-        <th data-col="14" onclick="sortTable(14, 'num')">Window Fns</th>
-        <th data-col="15" onclick="sortTable(15, 'num')">GROUP BY</th>
-        <th data-col="16" onclick="sortTable(16, 'num')">UNIONs</th>
-        <th data-col="17" onclick="sortTable(17, 'str')">Macros</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Downstream</th>
+        <th data-col="12" onclick="sortTable(12, 'str')">Has Primary Test</th>
+        <th data-col="13" onclick="sortTable(13, 'str')">Potential Primary Key</th>
+        <th data-col="14" onclick="sortTable(14, 'str')">Date / Timeseries</th>
+        <th data-col="15" onclick="sortTable(15, 'num')">Window Fns</th>
+        <th data-col="16" onclick="sortTable(16, 'num')">GROUP BY</th>
+        <th data-col="17" onclick="sortTable(17, 'num')">UNIONs</th>
+        <th data-col="18" onclick="sortTable(18, 'str')">Macros</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">Downstream</th>
       </tr>
     </thead>
     <tbody>
@@ -351,9 +373,13 @@
       <tr data-name="{{ m.name | lower }}"
           data-winfn="{{ m.window_fns or 0 }}"
           data-groupby="{{ m.group_bys or 0 }}"
+          data-unions="{{ m.unions or 0 }}"
           data-pk="{{ '1' if m.primary_key_cols else '0' }}"
           data-date="{{ '1' if m.has_date_column else '0' }}"
-          data-macros="{{ '1' if m.has_custom_macros else '0' }}">
+          data-macros="{{ '1' if m.has_custom_macros else '0' }}"
+          data-pkcandidate="{{ '1' if m.pk_value_col_names else '0' }}"
+          data-avgtime="{{ m.avg_execution_time or 0 }}"
+          data-downstream="{{ m.downstream_table_count or 0 }}">
         <td>
           <div class="model-name">{{ m.name }}</div>
           <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
@@ -382,6 +408,7 @@
           {% if has_costs %}{{ m.avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
         <td>{% if m.primary_key_cols %}<span style="color:{% if m.pk_verified %}var(--green){% else %}var(--blue){% endif %};font-weight:500;" title="{{ m.primary_key_cols | join(', ') }}{% if m.pk_verified %} (tests passing){% endif %}">{{ m.primary_key_cols | join(', ') }}</span>{% else %}<span class="no-muted">--</span>{% endif %}</td>
+        <td>{% if m.pk_value_col_names %}<span style="color:var(--blue);font-weight:500;" title="{{ m.pk_value_col_names | join(', ') }}">{{ m.pk_value_col_names | join(', ') }}</span>{% else %}<span class="no-muted">--</span>{% endif %}</td>
         <td>{% if m.has_date_column %}<span class="yes-green">Yes</span>{% else %}<span class="no-muted">No</span>{% endif %}</td>
         <td class="num" data-val="{{ m.window_fns or 0 }}">
           {% if m.has_window_function %}<span style="color: var(--orange);">{{ m.window_fns or 1 }}</span>{% else %}0{% endif %}
@@ -476,23 +503,53 @@
       });
     }
 
+    /* --- Require mode toggle (AND / OR) --- */
+    let requireMode = 'and';
+    function toggleRequireMode() {
+      requireMode = requireMode === 'and' ? 'or' : 'and';
+      document.getElementById('requireModeBtn').textContent = requireMode.toUpperCase();
+      filterTable();
+    }
+
     /* --- Filter Table --- */
-    /* When a checkbox is checked, rows that HAVE that attribute are hidden. */
+    /* HIDE checkboxes: rows that HAVE that attribute are hidden. */
+    /* REQUIRE checkboxes: rows that LACK that attribute are hidden (AND) or at least one must match (OR). */
     function filterTable() {
-      const search = document.getElementById('search').value.toLowerCase();
       const fWinFn = document.getElementById('filterWinFn').checked;
       const fGroupBy = document.getElementById('filterGroupBy').checked;
-      const fPK = document.getElementById('filterPK').checked;
-      const fDate = document.getElementById('filterDate').checked;
       const fMacros = document.getElementById('filterMacros').checked;
+      const fUnions = document.getElementById('filterUnions').checked;
+      const fPK = document.getElementById('filterPK').checked;
+      const fPKCandidate = document.getElementById('filterPKCandidate').checked;
+      const fDate = document.getElementById('filterDate').checked;
+      const minTimeMinutes = parseFloat(document.getElementById('filterMinTime').value) || 0;
+      const minTimeSecs = minTimeMinutes * 60;
+      const minDownstream = parseInt(document.getElementById('filterMinDownstream').value) || 0;
+      const anyRequire = fPK || fPKCandidate || fDate;
       document.querySelectorAll('#optTable tbody tr').forEach(row => {
-        const name = row.dataset.name || '';
-        let show = !search || name.includes(search);
+        let show = true;
+        // HIDE filters
         if (show && fWinFn && parseInt(row.dataset.winfn) > 0) show = false;
         if (show && fGroupBy && parseInt(row.dataset.groupby) > 0) show = false;
-        if (show && fPK && row.dataset.pk !== '1') show = false;
-        if (show && fDate && row.dataset.date !== '1') show = false;
         if (show && fMacros && row.dataset.macros === '1') show = false;
+        if (show && fUnions && parseInt(row.dataset.unions) > 0) show = false;
+        // REQUIRE filters
+        if (show && anyRequire) {
+          if (requireMode === 'and') {
+            if (fPK && row.dataset.pk !== '1') show = false;
+            if (fPKCandidate && row.dataset.pkcandidate !== '1') show = false;
+            if (fDate && row.dataset.date !== '1') show = false;
+          } else {
+            let anyMatch = false;
+            if (fPK && row.dataset.pk === '1') anyMatch = true;
+            if (fPKCandidate && row.dataset.pkcandidate === '1') anyMatch = true;
+            if (fDate && row.dataset.date === '1') anyMatch = true;
+            if (!anyMatch) show = false;
+          }
+        }
+        // Numeric filters
+        if (show && minTimeSecs > 0 && parseFloat(row.dataset.avgtime) < minTimeSecs) show = false;
+        if (show && minDownstream > 0 && parseInt(row.dataset.downstream) < minDownstream) show = false;
         row.style.display = show ? '' : 'none';
       });
     }

@@ -283,11 +283,12 @@
         <div class="section-toggle open" onclick="toggleSection(this)">
           <span class="section-arrow">&#9654;</span>
           <span class="section-title">Incremental Readiness Signals</span>
-          <span class="section-count">4 fields</span>
+          <span class="section-count">5 fields</span>
         </div>
         <div class="section-body">
           <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
-            <tr><td>Primary Key</td><td>The detected primary key column(s). Sources checked in priority order: (1) columns with both unique and not_null tests defined (queried directly from the Discovery API), (2) unique_key from dbt model config. Green = tests verified passing, blue = tests defined</td></tr>
+            <tr><td>Has Primary Test</td><td>The detected primary key column(s) that have tests defined. Sources checked in priority order: (1) columns with both unique and not_null tests defined (queried directly from the Discovery API), (2) unique_key from dbt model config. Green = tests verified passing, blue = tests defined</td></tr>
+            <tr><td>Potential Primary Key</td><td>Columns detected by naming convention that may serve as primary keys. Matches column names containing _id, _key, _sk, or _pk patterns (e.g. user_id, account_key, dim_sk). Useful for identifying incremental key candidates when no formal tests exist</td></tr>
             <tr><td>Date / Timeseries</td><td>Whether the model has a date or timeseries column suitable for incremental partitioning</td></tr>
             <tr><td>% New Rows</td><td>Average new rows per run as a percentage of total rows (avg_new_rows / latest_rows &times; 100). Lower values = better incremental candidate</td></tr>
             <tr><td>Macros</td><td>Custom (non-builtin) dbt macros detected in the model SQL. Models with custom macros may require macro changes for incremental conversion</td></tr>
