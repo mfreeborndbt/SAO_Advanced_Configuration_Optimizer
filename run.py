@@ -116,8 +116,17 @@ def check_for_updates():
                 ["git", "rev-list", "--count", f"HEAD..{REPO_REMOTE}/{REPO_BRANCH}"],
                 capture_output=True, text=True, cwd=ROOT,
             ).stdout.strip()
-            print(f"\n  *** Update available! You are {behind} commit(s) behind {REPO_REMOTE}/{REPO_BRANCH}. ***")
-            print(f"  *** Run 'git pull {REPO_REMOTE} {REPO_BRANCH}' to update. ***\n")
+            print(f"\n  *** Update available! You are {behind} commit(s) behind. Auto-updating... ***")
+            pull = subprocess.run(
+                ["git", "pull", REPO_REMOTE, REPO_BRANCH, "--ff-only"],
+                capture_output=True, text=True, cwd=ROOT, timeout=30,
+            )
+            if pull.returncode == 0:
+                new_commit = get_local_commit()
+                print(f"  *** Updated successfully! Now at {new_commit}. ***\n")
+            else:
+                print(f"  *** Auto-update failed (local changes?). Run 'git pull {REPO_REMOTE} {REPO_BRANCH}' manually. ***")
+                print(f"  *** {pull.stderr.strip()} ***\n")
         else:
             print("  Up to date.")
     except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
