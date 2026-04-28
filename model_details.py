@@ -2,12 +2,13 @@ import re
 import time
 import threading
 from discovery_client import DbtClient
+from cache_db import cache_get as db_get, cache_set as db_set
 
-# In-memory caches with TTL (same pattern as history.py aggregate cache)
+# In-memory caches (fast path) backed by DuckDB (persistence)
 _DETAIL_CACHE = {}
 _PK_CACHE = {}
 _CACHE_LOCK = threading.Lock()
-_CACHE_TTL = 600  # 10 minutes
+_CACHE_TTL = 6 * 3600  # 6 hours
 
 
 _DBT_BUILTINS = frozenset({
@@ -72,6 +73,14 @@ def fetch_pk_columns_from_tests(client: DbtClient, max_tests=2000):
         if entry and (time.time() - entry[0]) < _CACHE_TTL:
             print(f"  PK test data served from cache")
             return entry[1]
+    # DuckDB fallback
+    db_key = f"pk_cols:{cache_key}"
+    db_data = db_get(db_key, ttl=_CACHE_TTL)
+    if db_data is not None:
+        print(f"  PK test data served from DuckDB cache")
+        with _CACHE_LOCK:
+            _PK_CACHE[cache_key] = (time.time(), db_data)
+        return db_data
 
     query = """
     query ($environmentId: BigInt!, $first: Int!, $after: String) {
@@ -156,6 +165,7 @@ def fetch_pk_columns_from_tests(client: DbtClient, max_tests=2000):
 
     with _CACHE_LOCK:
         _PK_CACHE[cache_key] = (time.time(), result)
+    db_set(db_key, result)
     return result
 
 
@@ -167,6 +177,14 @@ def fetch_model_details(client: DbtClient, max_models=500):
         if entry and (time.time() - entry[0]) < _CACHE_TTL:
             print(f"  Model details served from cache")
             return entry[1]
+    # DuckDB fallback
+    db_key = f"model_details:{cache_key}"
+    db_data = db_get(db_key, ttl=_CACHE_TTL)
+    if db_data is not None:
+        print(f"  Model details served from DuckDB cache")
+        with _CACHE_LOCK:
+            _DETAIL_CACHE[cache_key] = (time.time(), db_data)
+        return db_data
 
     query = """
     query ($environmentId: BigInt!, $first: Int!, $after: String) {
@@ -351,4 +369,5 @@ def fetch_model_details(client: DbtClient, max_models=500):
 
     with _CACHE_LOCK:
         _DETAIL_CACHE[cache_key] = (time.time(), models)
+    db_set(db_key, models)
     return models
