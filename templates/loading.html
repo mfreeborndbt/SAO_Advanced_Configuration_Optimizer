@@ -144,6 +144,7 @@
 </head>
 <body>
   <nav class="tab-nav">
+    <a href="/overview" class="tab">Overview</a>
     <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
@@ -165,6 +166,7 @@
       <div class="terminal" id="terminal"></div>
       <div class="loader-footer">
         <span>Fetching data from dbt Cloud</span>
+        <button id="loadCancelBtn" onclick="window.history.back()" style="display:none;margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;padding:0.25rem 0.75rem;color:var(--text-muted);font-size:0.72rem;cursor:pointer;font-family:inherit;">Cancel</button>
         <span style="margin-left:auto;" class="elapsed" id="elapsed">0s</span>
       </div>
     </div>
@@ -179,9 +181,11 @@
     let lineCount = 0;
 
     // Elapsed timer
+    const cancelBtn = document.getElementById('loadCancelBtn');
     setInterval(() => {
       const s = Math.floor((Date.now() - startTime) / 1000);
       elapsedEl.textContent = s + 's';
+      if (s >= 3 && cancelBtn) cancelBtn.style.display = '';
     }, 1000);
 
     function addLine(text, cls) {

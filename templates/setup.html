@@ -207,6 +207,7 @@
 <body>
   <nav class="tab-nav">
     {% if creds %}
+    <a href="/overview" class="tab">Overview</a>
     <a href="/" class="tab">Full Model Context</a>
     <a href="/data-dictionary" class="tab">Data Dictionary</a>
     <a href="/models-optimization" class="tab">Models Optimization</a>
@@ -301,6 +302,7 @@
   <div style="width:280px;height:4px;background:#2a2d3a;border-radius:4px;overflow:hidden;">
     <div style="width:40%;height:100%;background:#6c63ff;border-radius:4px;animation:loadSlide 1.2s ease-in-out infinite;"></div>
   </div>
+  <button id="loadCancelBtn" onclick="window.history.back()" style="display:none;margin-top:1.25rem;background:transparent;border:1px solid #2a2d3a;border-radius:6px;padding:0.45rem 1.1rem;color:#8b8fa3;font-size:0.8rem;cursor:pointer;font-family:inherit;">Cancel</button>
 </div>
 <style>
 @keyframes loadSlide {
@@ -316,10 +318,12 @@ function showOverlayDelayed(msg) {
   if (lt) lt.textContent = msg;
   if (sub) sub.style.display = 'none';
   if (overlay) overlay.style.display = 'flex';
+  var cancelBtn = document.getElementById('loadCancelBtn');
   var start = Date.now();
   window._elapsedTimer = setInterval(function() {
     var elapsed = Math.floor((Date.now() - start) / 1000);
     if (elapsed >= 3 && sub) sub.style.display = '';
+    if (elapsed >= 3 && cancelBtn) cancelBtn.style.display = '';
     var el = document.getElementById('loadElapsed');
     if (el) el.textContent = elapsed + 's';
   }, 1000);
