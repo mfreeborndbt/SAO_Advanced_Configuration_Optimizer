@@ -82,9 +82,10 @@ def _preload_page(page):
 
     if page in ("/", "/models-optimization", "/updated-at", "/build-after"):
         _load_models_with_costs()
-    if page == "/models-optimization":
+    if page in ("/models-optimization", "/updated-at"):
         print("Fetching model details...")
         fetch_model_details(client)
+    if page == "/models-optimization":
         print("Fetching test results...")
         fetch_latest_test_results(client, days=7)
         print("Fetching primary key tests...")
@@ -591,6 +592,11 @@ def updated_at():
 
     project_name, models, total_runs, has_costs, env_key, account_name, sao_status, top_project_jobs = result
 
+    # Fetch code-level details for joins enrichment
+    client = get_client_from_config()
+    detail_models = fetch_model_details(client)
+    details_lookup = {m["unique_id"]: m for m in detail_models}
+
     # Build lookup for static detection: a model is "static" if it never changed rows
     model_lookup = {m["unique_id"]: m for m in models}
     for m in models:
@@ -616,7 +622,8 @@ def updated_at():
     for m in models:
         if m["materialized"] not in ("table", "incremental"):
             continue
-        upstream_count = m.get("upstream_table_count", 0)
+        details = details_lookup.get(m["unique_id"], {})
+        m["joins"] = details.get("joins", 0)
         candidates.append(m)
 
     candidates.sort(key=lambda m: m.get("downstream_avg_cost") or 0, reverse=True)

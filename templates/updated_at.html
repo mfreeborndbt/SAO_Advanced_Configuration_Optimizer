@@ -265,6 +265,10 @@
       <input type="checkbox" id="hideStaticUpstream" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
       Hide models with static upstream
     </label>
+    <label class="toggle-label" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);cursor:pointer;">
+      <input type="checkbox" id="hideWithJoins" onchange="filterTable()" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">
+      Hide models with joins
+    </label>
 
     <div class="multi-select" id="colToggleWrap">
       <div class="multi-select-btn" onclick="toggleDropdown('colToggleWrap')">Columns</div>
@@ -297,8 +301,9 @@
         <th data-col="15" onclick="sortTable(15, 'num')">Downstream Cost</th>
         <th data-col="16" onclick="sortTable(16, 'num')">Upstream Cost</th>
         <th data-col="17" onclick="sortTable(17, 'num')">Runs</th>
-        <th data-col="18" onclick="sortTable(18, 'num')">Avg New Rows</th>
-        <th data-col="19" onclick="sortTable(19, 'num')">Rows</th>
+        <th data-col="18" onclick="sortTable(18, 'num')">Joins</th>
+        <th data-col="19" onclick="sortTable(19, 'num')">Avg New Rows</th>
+        <th data-col="20" onclick="sortTable(20, 'num')">Rows</th>
       </tr>
     </thead>
     <tbody>
@@ -307,7 +312,8 @@
           data-upstream="{{ m.upstream_table_count or 0 }}"
           data-avgcost="{{ m.avg_cost or 0 }}"
           data-downcost="{{ m.downstream_avg_cost or 0 }}"
-          data-staticup="{{ '1' if m.has_static_upstream else '0' }}">
+          data-staticup="{{ '1' if m.has_static_upstream else '0' }}"
+          data-joins="{{ m.joins or 0 }}">
         <td>
           <div class="model-name">{{ m.name }}</div>
           <div class="schema-label">{{ m.database }}.{{ m.schema }}</div>
@@ -351,6 +357,9 @@
           {% if has_costs and m.upstream_avg_cost is not none %}{{ m.upstream_avg_cost | cost }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
         <td class="num" data-val="{{ m.total_runs or 0 }}">{{ m.total_runs or 0 }}</td>
+        <td class="num" data-val="{{ m.joins or 0 }}">
+          {% if m.joins %}<span style="color: var(--orange);">{{ m.joins }}</span>{% else %}0{% endif %}
+        </td>
         <td class="num" data-val="{{ m.avg_new_rows or 0 }}">
           {% if m.avg_new_rows is not none %}{{ "{:,.0f}".format(m.avg_new_rows) }}{% else %}<span class="muted">--</span>{% endif %}
         </td>
@@ -424,6 +433,7 @@
       const maxUpEl = document.getElementById('maxUpstream');
       const maxUp = maxUpEl.value ? parseFloat(maxUpEl.value) : Infinity;
       const hideStatic = document.getElementById('hideStaticUpstream').checked;
+      const hideJoins = document.getElementById('hideWithJoins').checked;
       const minAvgCostEl = document.getElementById('minAvgCost');
       const minAvgCost = minAvgCostEl ? (parseFloat(minAvgCostEl.value) || 0) : 0;
       const minDownCostEl = document.getElementById('minDownCost');
@@ -435,6 +445,7 @@
         const avgCost = parseFloat(row.dataset.avgcost) || 0;
         const downCost = parseFloat(row.dataset.downcost) || 0;
         const hasStaticUp = row.dataset.staticup === '1';
+        const joins = parseInt(row.dataset.joins) || 0;
 
         let show = true;
         if (search && !name.includes(search)) show = false;
@@ -442,6 +453,7 @@
         if (avgCost < minAvgCost) show = false;
         if (downCost < minDownCost) show = false;
         if (hideStatic && hasStaticUp) show = false;
+        if (hideJoins && joins > 0) show = false;
         row.style.display = show ? '' : 'none';
       });
     }

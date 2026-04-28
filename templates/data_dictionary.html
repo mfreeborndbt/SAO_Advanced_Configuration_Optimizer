@@ -401,7 +401,7 @@
         <div class="section-toggle open" onclick="toggleSection(this)">
           <span class="section-arrow">&#9654;</span>
           <span class="section-title">SAO &amp; Lineage</span>
-          <span class="section-count">5 fields</span>
+          <span class="section-count">6 fields</span>
         </div>
         <div class="section-body">
           <table class="dict-table"><thead><tr><th>Term</th><th>Definition</th></tr></thead><tbody>
@@ -410,6 +410,7 @@
             <tr><td>Upstream / Downstream Cost</td><td>Sum of upstream or downstream models&rsquo; average per-run costs</td></tr>
             <tr><td>Downstream Tbls</td><td>Count of transitive downstream table/incremental models</td></tr>
             <tr><td>Avg New Rows</td><td>Estimated average rows added per run</td></tr>
+            <tr><td>Joins</td><td>Number of JOIN clauses (excluding cross joins) detected in the model SQL. Models with joins are harder to configure with updates_on since multiple upstream tables are combined</td></tr>
           </tbody></table>
         </div>
       </div>
