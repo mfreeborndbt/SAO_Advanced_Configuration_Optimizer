@@ -410,7 +410,7 @@
             <tr><td>Upstream / Downstream Cost</td><td>Sum of upstream or downstream models&rsquo; average per-run costs</td></tr>
             <tr><td>Downstream Tbls</td><td>Count of transitive downstream table/incremental models</td></tr>
             <tr><td>Avg New Rows</td><td>Estimated average rows added per run</td></tr>
-            <tr><td>Joins</td><td>Number of JOIN clauses (excluding cross joins) detected in the model SQL. Models with joins are harder to configure with updates_on since multiple upstream tables are combined</td></tr>
+            <tr><td>Joins</td><td>Number of JOIN clauses (excluding cross joins) detected in the model SQL. Models with joins are good candidates for updates_on since they combine multiple upstream tables that SAO can track independently</td></tr>
           </tbody></table>
         </div>
       </div>

@@ -343,35 +343,13 @@ def models_optimization():
     test_results = fetch_latest_test_results(client, days=7)
     pk_cols_from_api = fetch_pk_columns_from_tests(client)
 
-    # Compute top 20% expense threshold (per run)
-    if has_costs:
-        expense_vals = sorted([m["avg_cost"] for m in models if m.get("avg_cost")])
-    else:
-        expense_vals = sorted([m["avg_execution_time"] for m in models if m.get("avg_execution_time")])
-    p80 = expense_vals[int(len(expense_vals) * 0.8)] if expense_vals else 0
-
-    # Filter models for optimization candidates
+    # Show all table models — user can filter by top N in the UI
     candidates = []
     for m in models:
         if m["materialized"] != "table":
             continue
 
         details = details_lookup.get(m["unique_id"], {})
-
-        rows = m.get("latest_rows") or 0
-        avg_time = m.get("avg_execution_time") or 0
-        expense = m.get("avg_cost") or avg_time if has_costs else avg_time
-
-        size_time_qualifies = rows >= 1_000_000 and avg_time >= 60
-        top20_qualifies = expense >= p80
-
-        if not (size_time_qualifies or top20_qualifies):
-            continue
-
-        has_pk = details.get("has_potential_pk", bool(details.get("unique_key")))
-        has_date = details.get("has_date_column", False)
-        if not (has_pk or has_date):
-            continue
 
         # Merge aggregated + detail data
         enriched = dict(m)
@@ -429,13 +407,6 @@ def models_optimization():
             enriched["new_rows_pct"] = round(avg_new / latest * 100, 2)
         else:
             enriched["new_rows_pct"] = None
-
-        qualifications = []
-        if size_time_qualifies:
-            qualifications.append(f"{rows:,} rows, {fmt_duration(avg_time)} avg")
-        if top20_qualifies:
-            qualifications.append("Top 20% expensive")
-        enriched["qualification"] = " | ".join(qualifications)
 
         candidates.append(enriched)
 

@@ -335,6 +335,10 @@
   <div class="controls" style="margin-top:0;">
     <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Filters:</span>
     <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);">
+      Top N by avg time
+      <input type="number" id="filterTopN" placeholder="all" min="1" step="1" style="width:80px;" oninput="filterTable()">
+    </label>
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-muted);">
       Min Avg Time (min)
       <input type="number" id="filterMinTime" placeholder="minutes" min="0" step="1" style="width:100px;" oninput="filterTable()">
     </label>
@@ -528,9 +532,24 @@
       const minTimeMinutes = parseFloat(document.getElementById('filterMinTime').value) || 0;
       const minTimeSecs = minTimeMinutes * 60;
       const minDownstream = parseInt(document.getElementById('filterMinDownstream').value) || 0;
+      const topN = parseInt(document.getElementById('filterTopN').value) || 0;
       const anyRequire = fPK || fPKCandidate || fDate;
-      document.querySelectorAll('#optTable tbody tr').forEach(row => {
+
+      // Build a ranked list by avg time (descending) for Top N filter
+      const rows = Array.from(document.querySelectorAll('#optTable tbody tr'));
+      const ranked = rows.map(row => ({
+        row,
+        avgtime: parseFloat(row.dataset.avgtime) || 0
+      })).sort((a, b) => b.avgtime - a.avgtime);
+      const topNSet = new Set();
+      if (topN > 0) {
+        ranked.slice(0, topN).forEach(r => topNSet.add(r.row));
+      }
+
+      rows.forEach(row => {
         let show = true;
+        // Top N filter
+        if (topN > 0 && !topNSet.has(row)) show = false;
         // HIDE filters
         if (show && fWinFn && parseInt(row.dataset.winfn) > 0) show = false;
         if (show && fGroupBy && parseInt(row.dataset.groupby) > 0) show = false;
